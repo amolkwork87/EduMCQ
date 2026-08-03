@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:10501",
+      "sslPort": 44310
+    }
+  },
+  "profiles": {
+    "EduMcq.API - Local": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "index.html",
+      "applicationUrl": "http://localhost:9000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Local",
+        "CLOUD_ENV": "Azure"
+      }
+    },
+    "EduMcq.API - Dev": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:9000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Dev",
+        "CLOUD_ENV": "Azure"
+      }
+    },
+    "EduMcq.API - QA": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:9000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Qa",
+        "CLOUD_ENV": "Azure"
+      }
+    },
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

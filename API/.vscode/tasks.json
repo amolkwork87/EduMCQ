@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/EduMcq.sln"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    
+    {
+      "label": "buildEduMcq",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/EduMcq.API/EduMcq.API.csproj"
+      ],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}

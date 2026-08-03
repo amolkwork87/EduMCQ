@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="EduMcq.API/EduMcq.API.csproj" />
+  <Project Path="EduMcq.Interfaces/EduMcq.Interfaces.csproj" />
+  <Project Path="EduMcq.Models/EduMcq.Models.csproj" />
+  <Project Path="EduMcq.Repository/EduMcq.Repository.csproj" />
+  <Project Path="EduMcq.Services/EduMcq.Services.csproj" />
+</Solution>
