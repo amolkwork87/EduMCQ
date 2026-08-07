@@ -46,7 +46,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 // Repositories
 builder.Services.AddRepositories();
-
+builder.Services.AddServices();
 builder.Services.JWTAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 

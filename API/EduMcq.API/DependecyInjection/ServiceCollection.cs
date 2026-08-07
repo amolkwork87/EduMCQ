@@ -1,4 +1,6 @@
 using System.Text;
+using EduMcq.Interfaces;
+using EduMCQ.Services;
 using EvolveDb;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -28,9 +30,16 @@ public static class ServiceCollection
     public static void AddRepositories(this IServiceCollection services)
     {
         //services.AddScoped<IHorseRepository, HorseRepository>();
-        
 
 
+
+    }
+
+    public static void AddServices(this IServiceCollection services)
+    {
+
+        services.AddScoped<IExcelImportService, ExcelImportService>();
+        services.AddScoped<IImageImportService, ImageImportService>();
     }
 
 

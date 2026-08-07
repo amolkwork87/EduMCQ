@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EduMcq.Models\EduMcq.Models.csproj" />
+    <ProjectReference Include="..\EduMcq.Services\EduMcq.Services.csproj" />
   </ItemGroup>
 
 </Project>

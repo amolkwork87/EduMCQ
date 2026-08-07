@@ -1,6 +1,4 @@
-﻿using System.Security.Claims;
-
-namespace EduMcq.Models;
+﻿namespace EduMcq.Models;
 
 public class User
 {
