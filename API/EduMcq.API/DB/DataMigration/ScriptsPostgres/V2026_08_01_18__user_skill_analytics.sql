@@ -1,11 +1,11 @@
 CREATE TABLE if not exists  user_skill_analytics (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     skill_id        UUID NOT NULL REFERENCES thinking_skills(id) ON DELETE CASCADE,
     total_attempted INTEGER DEFAULT 0,
     correct_count   INTEGER DEFAULT 0,
     accuracy_pct    DECIMAL(5,2) DEFAULT 0,
-    weakness_level  weakness_level DEFAULT 'average',
+    weakness_level  TEXT DEFAULT 'average',
     last_assessed   TIMESTAMPTZ,
     created_at      TIMESTAMPTZ DEFAULT now(),
     updated_at      TIMESTAMPTZ DEFAULT now(),

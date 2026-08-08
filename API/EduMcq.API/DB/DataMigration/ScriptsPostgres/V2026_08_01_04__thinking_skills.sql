@@ -1,8 +1,8 @@
 CREATE TABLE if not exists thinking_skills (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name            VARCHAR(100) NOT NULL UNIQUE,
     slug            VARCHAR(100) NOT NULL UNIQUE,
     description     TEXT,
-    category        skill_category DEFAULT 'cognitive',
+    category         TEXT DEFAULT 'cognitive',
     created_at      TIMESTAMPTZ DEFAULT now()
 );

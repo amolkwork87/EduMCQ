@@ -18,12 +18,15 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend", policy =>
     {
         
-        policy.WithOrigins("http://localhost:8081",          // Expo local dev
-            "https://trackpulse-snowy.vercel.app")
-        .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        // policy.WithOrigins("http://localhost:5173")
+        // .AllowAnyHeader()
+        //       .AllowAnyMethod()
+        //       .AllowCredentials();
               //.SetIsOriginAllowed(_ => true);
+
+              policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
     });
 });
 
@@ -83,7 +86,7 @@ app.MapGet("/weatherforecast", () =>
 .WithName("GetWeatherForecast");
 
 
-//app.ApplyDbMigrations(connectionString);
+app.ApplyDbMigrations(builder.Configuration["EduMcqDatabaseConnection"]);
 
 
 // app.UseHttpsRedirection();

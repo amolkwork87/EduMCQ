@@ -1,5 +1,5 @@
 CREATE TABLE if not exists  options (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     question_id     UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     label           CHAR(1) NOT NULL CHECK (label IN ('A','B','C','D')),
     text            TEXT,

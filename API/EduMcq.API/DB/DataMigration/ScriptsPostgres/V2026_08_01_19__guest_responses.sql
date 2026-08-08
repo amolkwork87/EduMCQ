@@ -1,5 +1,5 @@
 CREATE TABLE if not exists  guest_responses (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY,
     device_uuid     VARCHAR(100) NOT NULL,
     question_id     UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     selected_option_id UUID REFERENCES options(id) ON DELETE SET NULL,

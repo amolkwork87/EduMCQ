@@ -1,11 +1,11 @@
 CREATE TABLE if not exists  users (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phone           VARCHAR(20) UNIQUE,
     email           VARCHAR(255) UNIQUE,
     google_id       VARCHAR(255) UNIQUE,
     facebook_id     VARCHAR(255) UNIQUE,
     name            VARCHAR(200),
-    role            user_role DEFAULT 'student',
+    role            TEXT DEFAULT 'student',
     avatar_url      VARCHAR(500),
     is_phone_verified  BOOLEAN DEFAULT false,
     class_standard  VARCHAR(20),

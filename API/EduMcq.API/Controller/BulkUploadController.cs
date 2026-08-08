@@ -1,6 +1,6 @@
 using EduMcq.Interfaces;
+using EduMcq.Models.BulkUpload;
 using Microsoft.AspNetCore.Mvc;
-
 
 [ApiController]
 [Route("api/admin/[controller]")]
@@ -8,16 +8,21 @@ public class UploadController : ControllerBase
 {
     private readonly IExcelImportService _excelImportService;
     private readonly IImageImportService _imageImportService;
-    public UploadController(IExcelImportService excelImportService,
-    IImageImportService imageImportService)
+    private readonly ILogger<UploadController> _logger;
+
+    public UploadController(
+        IExcelImportService excelImportService,
+        IImageImportService imageImportService,
+        ILogger<UploadController> logger)
     {
         _excelImportService = excelImportService;
         _imageImportService = imageImportService;
+        _logger = logger;
     }
 
+    // --- LEGACY: Single-file upload with ZIP (kept for backward compatibility) ---
     [HttpPost("bulk-upload")]
     [IgnoreAntiforgeryToken]
-    
     public async Task<IActionResult> BulkUpload(IFormFile? zipFile, IFormFile excelFile, CancellationToken ct)
     {
         if (excelFile == null || excelFile.Length == 0)
@@ -28,14 +33,12 @@ public class UploadController : ControllerBase
 
         Dictionary<string, string>? imageMap = null;
 
-        // Step 1: If ZIP uploaded, extract and upload images first
         if (zipFile != null && zipFile.Length > 0)
         {
             var zipStream = zipFile.OpenReadStream();
-            //imageMap = await imageService.ProcessZipAsync(zipStream);
+            // imageMap = await _imageImportService.ProcessZipAsync(zipStream);
         }
 
-        // Step 2: Parse Excel and bulk-insert
         using var excelStream = excelFile.OpenReadStream();
         var result = await _excelImportService.ImportAsync(excelStream, imageMap);
 
@@ -51,7 +54,56 @@ public class UploadController : ControllerBase
         });
     }
 
+    // --- NEW: Batch upload from React frontend ---
+    [HttpPost("bulk-upload-batch")]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> BulkUploadBatch([FromBody] BatchUploadRequest request, CancellationToken ct)
+    {
+        if (request?.Rows == null || request.Rows.Count == 0)
+            return BadRequest(new { error = "No rows provided." });
 
+        if (request.Rows.Count > 500)
+            return BadRequest(new { error = "Batch size must not exceed 500 rows." });
+
+        _logger.LogInformation(
+            "Processing batch {BatchNumber}/{TotalBatches} with {RowCount} rows",
+            request.BatchNumber, request.TotalBatches, request.Rows.Count);
+
+        try
+        {
+            var createdById = GetCurrentUserId(); // Implement based on your auth
+            var result = await _excelImportService.ImportBatchAsync(
+                request.Rows, 
+                request.DuplicateHashes ?? new List<string>(),
+                createdById);
+
+            return Ok(new
+            {
+                success = result.SuccessCount > 0,
+                successCount = result.SuccessCount,
+                failureCount = result.FailureCount,
+                duplicateCount = result.DuplicateCount,
+                totalProcessed = request.Rows.Count,
+                newHashes = result.NewHashes,
+                errors = result.Errors,
+                duplicates = result.Duplicates,
+                status = result.Status,
+                message = result.Message
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Batch upload failed for batch {BatchNumber}", request.BatchNumber);
+            return StatusCode(500, new
+            {
+                error = "Batch processing failed",
+                details = ex.Message,
+                batchNumber = request.BatchNumber
+            });
+        }
+    }
+
+    // --- Image upload (for individual image uploads from React) ---
     [HttpPost("upload-image")]
     [IgnoreAntiforgeryToken]
     public async Task<IActionResult> UploadImage(IFormFile file)
@@ -69,4 +121,35 @@ public class UploadController : ControllerBase
         return Ok(new { url });
     }
 
+    // --- Presigned URL for S3 upload (React uploads directly to S3) ---
+    [HttpPost("presign-image")]
+    [IgnoreAntiforgeryToken]
+    public IActionResult PresignImage([FromBody] PresignRequest request)
+    {
+        // Implement with your S3/MinIO/R2 client
+        // Returns { presignedUrl, key }
+        var key = $"questions/{DateTime.UtcNow:yyyy/MM}/{Guid.NewGuid()}-{request.FileName}";
+        var presignedUrl = _imageImportService.GeneratePresignedUrl(key, request.ContentType);
+
+        return Ok(new
+        {
+            presignedUrl,
+            key,
+            expiresIn = 300 // 5 minutes
+        });
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        // Implement based on your auth system (JWT, session, etc.)
+        var userIdClaim = User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
+    }
+}
+
+public class PresignRequest
+{
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "";
+    public int? QuestionIndex { get; set; }
 }

@@ -5,27 +5,199 @@ namespace EduMCQ.Infrastructure;
 
 public class AppDb : IDisposable
 {
-    private readonly NpgsqlConnection _conn;
+    private readonly string _connectionString;
+    private NpgsqlConnection? _conn;
+    private bool _isDisposed;
 
     public AppDb(string connectionString)
     {
-        _conn = new NpgsqlConnection(connectionString);
-        _conn.Open();
+        _connectionString = connectionString;
     }
 
-    public NpgsqlConnection Connection => _conn;
-
-    public NpgsqlCommand CreateCommand(string sql)
+    public async Task<NpgsqlConnection> GetConnectionAsync()
     {
-        var cmd = new NpgsqlCommand(sql, _conn);
+        if (_conn == null || _conn.State != ConnectionState.Open)
+        {
+            _conn = new NpgsqlConnection(_connectionString);
+            await _conn.OpenAsync();
+        }
+        return _conn;
+    }
+
+    public NpgsqlConnection? Connection => _conn;
+
+    public async Task<NpgsqlCommand> CreateCommandAsync(string sql, NpgsqlTransaction? tx = null)
+    {
+        var conn = await GetConnectionAsync();
+        var cmd = new NpgsqlCommand(sql, conn, tx);
         cmd.CommandTimeout = 300; // 5 min for bulk ops
         return cmd;
     }
 
-    // Look up hierarchy IDs by name — returns null if not found
+    public NpgsqlCommand CreateCommand(string sql, NpgsqlTransaction? tx = null)
+    {
+        if (_conn == null || _conn.State != ConnectionState.Open)
+            throw new InvalidOperationException("Connection not open. Use CreateCommandAsync instead.");
+
+        var cmd = new NpgsqlCommand(sql, _conn, tx);
+        cmd.CommandTimeout = 300;
+        return cmd;
+    }
+
+    // --- Batch-optimized lookup methods (cache results in memory) ---
+
+    private Dictionary<string, Guid>? _examCache;
+    private Dictionary<(Guid examId, string name), Guid>? _standardCache;
+    private Dictionary<(Guid examId, string name), Guid>? _subjectCache;
+    private Dictionary<(Guid subjectId, string name, string? parentName), Guid>? _topicCache;
+    private Dictionary<(Guid topicId, string name), Guid>? _conceptCache;
+    private Dictionary<string, Guid>? _skillCache;
+    private HashSet<string>? _hashCache;
+
+    public async Task PreloadCachesAsync(NpgsqlTransaction tx)
+    {
+        var conn = await GetConnectionAsync();
+
+        // Preload all exams
+        _examCache = new();
+        using (var cmd = new NpgsqlCommand("SELECT id, name FROM exams", conn, tx))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+                _examCache[reader.GetString(1)] = reader.GetGuid(0);
+        }
+
+        // Preload all standards
+        _standardCache = new();
+        using (var cmd = new NpgsqlCommand("SELECT id, exam_id, name FROM standards", conn, tx))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+                _standardCache[(reader.GetGuid(1), reader.GetString(2))] = reader.GetGuid(0);
+        }
+
+        // Preload all subjects
+        _subjectCache = new();
+        using (var cmd = new NpgsqlCommand("SELECT id, exam_id, name FROM subjects", conn, tx))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+                _subjectCache[(reader.GetGuid(1), reader.GetString(2))] = reader.GetGuid(0);
+        }
+
+        // Preload all topics
+        _topicCache = new();
+        using (var cmd = new NpgsqlCommand("SELECT id, subject_id, name, COALESCE(parent_id::text, '') as parent FROM topics", conn, tx))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                var parentId = reader.GetString(3);
+                var parentName = string.IsNullOrEmpty(parentId) ? null : parentId;
+                _topicCache[(reader.GetGuid(1), reader.GetString(2), parentName)] = reader.GetGuid(0);
+            }
+        }
+
+        // Preload all concepts
+        _conceptCache = new();
+        using (var cmd = new NpgsqlCommand("SELECT id, topic_id, name FROM concepts", conn, tx))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+                _conceptCache[(reader.GetGuid(1), reader.GetString(2))] = reader.GetGuid(0);
+        }
+
+        // Preload all thinking skills
+        _skillCache = new();
+        using (var cmd = new NpgsqlCommand("SELECT id, LOWER(name) as name FROM thinking_skills", conn, tx))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+                _skillCache[reader.GetString(1)] = reader.GetGuid(0);
+        }
+
+        // Preload all existing hashes for duplicate check
+        _hashCache = new();
+        using (var cmd = new NpgsqlCommand("SELECT content_hash FROM questions", conn, tx))
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+                _hashCache.Add(reader.GetString(0));
+        }
+    }
+
+    // --- Cached lookup methods (use after PreloadCachesAsync) ---
+
+    public Guid? GetExamId(string name)
+    {
+        if (_examCache == null) throw new InvalidOperationException("Caches not loaded. Call PreloadCachesAsync first.");
+        return _examCache.TryGetValue(name, out var id) ? id : null;
+    }
+
+    public Guid? GetStandardId(Guid examId, string name)
+    {
+        if (_standardCache == null) throw new InvalidOperationException("Caches not loaded.");
+        return _standardCache.TryGetValue((examId, name), out var id) ? id : null;
+    }
+
+    public Guid? GetSubjectId(Guid examId, string name)
+    {
+        if (_subjectCache == null) throw new InvalidOperationException("Caches not loaded.");
+        return _subjectCache.TryGetValue((examId, name), out var id) ? id : null;
+    }
+
+    public Guid? GetTopicId(Guid subjectId, string name, string? subtopicName = null)
+    {
+        if (_topicCache == null) throw new InvalidOperationException("Caches not loaded.");
+
+        // Try exact match first
+        if (_topicCache.TryGetValue((subjectId, name, subtopicName), out var id))
+            return id;
+
+        // Try without parent
+        if (subtopicName != null && _topicCache.TryGetValue((subjectId, name, null), out id))
+            return id;
+
+        return null;
+    }
+
+    public Guid? GetConceptId(Guid topicId, string name)
+    {
+        if (_conceptCache == null) throw new InvalidOperationException("Caches not loaded.");
+        return _conceptCache.TryGetValue((topicId, name), out var id) ? id : null;
+    }
+
+    public List<Guid> GetSkillIds(string[] skillNames)
+    {
+        if (_skillCache == null) throw new InvalidOperationException("Caches not loaded.");
+        var ids = new List<Guid>();
+        foreach (var name in skillNames)
+        {
+            var key = name.Trim().ToLower();
+            if (_skillCache.TryGetValue(key, out var id))
+                ids.Add(id);
+        }
+        return ids;
+    }
+
+    public bool IsDuplicateHash(string hash)
+    {
+        if (_hashCache == null) throw new InvalidOperationException("Caches not loaded.");
+        return _hashCache.Contains(hash);
+    }
+
+    public void AddHash(string hash)
+    {
+        _hashCache?.Add(hash);
+    }
+
+    // --- Legacy async methods (for backward compatibility) ---
+
     public async Task<Guid?> GetExamIdAsync(NpgsqlTransaction tx, string name)
     {
-        using var cmd = new NpgsqlCommand("SELECT id FROM exams WHERE name = @name", _conn, tx);
+        if (_examCache != null) return GetExamId(name);
+
+        using var cmd = new NpgsqlCommand("SELECT id FROM exams WHERE name = @name", await GetConnectionAsync(), tx);
         cmd.Parameters.AddWithValue("name", name);
         var result = await cmd.ExecuteScalarAsync();
         return result == null ? null : (Guid?)result;
@@ -33,7 +205,9 @@ public class AppDb : IDisposable
 
     public async Task<Guid?> GetStandardIdAsync(NpgsqlTransaction tx, Guid examId, string name)
     {
-        using var cmd = new NpgsqlCommand("SELECT id FROM standards WHERE exam_id = @eid AND name = @name", _conn, tx);
+        if (_standardCache != null) return GetStandardId(examId, name);
+
+        using var cmd = new NpgsqlCommand("SELECT id FROM standards WHERE exam_id = @eid AND name = @name", await GetConnectionAsync(), tx);
         cmd.Parameters.AddWithValue("eid", examId);
         cmd.Parameters.AddWithValue("name", name);
         var result = await cmd.ExecuteScalarAsync();
@@ -42,78 +216,31 @@ public class AppDb : IDisposable
 
     public async Task<Guid?> GetSubjectIdAsync(NpgsqlTransaction tx, Guid examId, string name)
     {
-        using var cmd = new NpgsqlCommand("SELECT id FROM subjects WHERE exam_id = @eid AND name = @name", _conn, tx);
+        if (_subjectCache != null) return GetSubjectId(examId, name);
+
+        using var cmd = new NpgsqlCommand("SELECT id FROM subjects WHERE exam_id = @eid AND name = @name", await GetConnectionAsync(), tx);
         cmd.Parameters.AddWithValue("eid", examId);
         cmd.Parameters.AddWithValue("name", name);
         var result = await cmd.ExecuteScalarAsync();
         return result == null ? null : (Guid?)result;
     }
 
-    // Find topic by subject + name + optional parent
-    public async Task<Guid?> GetTopicIdAsync(NpgsqlTransaction tx, Guid subjectId, string name, string? subtopicName = null)
-    {
-        if (subtopicName == null)
-        {
-            // Top-level topic
-            using var cmd = new NpgsqlCommand(
-                "SELECT id FROM topics WHERE subject_id = @sid AND name = @name AND parent_id IS NULL", _conn, tx);
-            cmd.Parameters.AddWithValue("sid", subjectId);
-            cmd.Parameters.AddWithValue("name", name);
-            var result = await cmd.ExecuteScalarAsync();
-            return result == null ? null : (Guid?)result;
-        }
-        else
-        {
-            // Find parent topic first, then subtopic
-            using var parentCmd = new NpgsqlCommand(
-                "SELECT id FROM topics WHERE subject_id = @sid AND name = @pname AND parent_id IS NULL", _conn, tx);
-            parentCmd.Parameters.AddWithValue("sid", subjectId);
-            parentCmd.Parameters.AddWithValue("pname", name);
-            var parentId = await parentCmd.ExecuteScalarAsync();
-            if (parentId == null) return null;
-
-            using var childCmd = new NpgsqlCommand(
-                "SELECT id FROM topics WHERE parent_id = @pid AND name = @cname", _conn, tx);
-            childCmd.Parameters.AddWithValue("pid", (Guid)parentId);
-            childCmd.Parameters.AddWithValue("cname", subtopicName);
-            var childResult = await childCmd.ExecuteScalarAsync();
-            return childResult == null ? null : (Guid?)childResult;
-        }
-    }
-
-    public async Task<Guid?> GetConceptIdAsync(NpgsqlTransaction tx, Guid topicId, string name)
-    {
-        using var cmd = new NpgsqlCommand(
-            "SELECT id FROM concepts WHERE topic_id = @tid AND name = @name", _conn, tx);
-        cmd.Parameters.AddWithValue("tid", topicId);
-        cmd.Parameters.AddWithValue("name", name);
-        var result = await cmd.ExecuteScalarAsync();
-        return result == null ? null : (Guid?)result;
-    }
-
-    public async Task<List<Guid>> GetSkillIdsAsync(NpgsqlTransaction tx, string[] skillNames)
-    {
-        var ids = new List<Guid>();
-        foreach (var name in skillNames)
-        {
-            using var cmd = new NpgsqlCommand(
-                "SELECT id FROM thinking_skills WHERE LOWER(name) = LOWER(@name)", _conn, tx);
-            cmd.Parameters.AddWithValue("name", name.Trim());
-            var result = await cmd.ExecuteScalarAsync();
-            if (result != null) ids.Add((Guid)result);
-        }
-        return ids;
-    }
-
-    // Check for duplicate by content hash
     public async Task<Guid?> FindDuplicateAsync(NpgsqlTransaction tx, string contentHash)
     {
-        using var cmd = new NpgsqlCommand(
-            "SELECT id FROM questions WHERE content_hash = @hash", _conn, tx);
+        if (_hashCache != null) return IsDuplicateHash(contentHash) ? Guid.NewGuid() : null; // Return dummy for compatibility
+
+        using var cmd = new NpgsqlCommand("SELECT id FROM questions WHERE content_hash = @hash", await GetConnectionAsync(), tx);
         cmd.Parameters.AddWithValue("hash", contentHash);
         var result = await cmd.ExecuteScalarAsync();
         return result == null ? null : (Guid?)result;
     }
 
-    public void Dispose() => _conn.Dispose();
+    public void Dispose()
+    {
+        if (!_isDisposed)
+        {
+            _conn?.Dispose();
+            _isDisposed = true;
+        }
+    }
 }
