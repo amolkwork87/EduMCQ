@@ -1,4 +1,7 @@
-CREATE TABLE if not exists  options (
+-- ============================================================
+-- 8. OPTIONS (4 options per question)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS options (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     question_id     UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     label           CHAR(1) NOT NULL CHECK (label IN ('A','B','C','D')),

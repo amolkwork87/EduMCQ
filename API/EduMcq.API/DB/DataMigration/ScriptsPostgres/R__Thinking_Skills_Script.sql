@@ -1,11 +1,11 @@
--- Thinking Skills
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Pattern Recognition', 'pattern-recognition', 'cognitive', 'Identifying patterns in numbers, shapes, or sequences') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Logical Reasoning', 'logical-reasoning', 'analytical', 'Drawing valid conclusions from given information') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Spatial Thinking', 'spatial-thinking', 'cognitive', 'Mental manipulation of 2D/3D shapes') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Working Backwards', 'working-backwards', 'analytical', 'Starting from the outcome and reversing steps') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Estimation', 'estimation', 'cognitive', 'Approximating values when exact calculation is impractical') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Deductive Reasoning', 'deductive-reasoning', 'analytical', 'Applying general rules to specific cases') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Creative Thinking', 'creative-thinking', 'creative', 'Finding unconventional solutions') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Problem Decomposition', 'problem-decomposition', 'analytical', 'Breaking complex problems into smaller parts') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Analogical Reasoning', 'analogical-reasoning', 'cognitive', 'Identifying relationships between pairs') ON CONFLICT (slug) DO NOTHING;
-INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Decision Making', 'decision-making', 'analytical', 'Evaluating options and selecting the best course of action') ON CONFLICT (slug) DO NOTHING;
+-- -- Thinking Skills
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Pattern Recognition', 'pattern-recognition', 'cognitive', 'Identifying patterns in numbers, shapes, or sequences') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Logical Reasoning', 'logical-reasoning', 'analytical', 'Drawing valid conclusions from given information') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Spatial Thinking', 'spatial-thinking', 'cognitive', 'Mental manipulation of 2D/3D shapes') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Working Backwards', 'working-backwards', 'analytical', 'Starting from the outcome and reversing steps') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Estimation', 'estimation', 'cognitive', 'Approximating values when exact calculation is impractical') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Deductive Reasoning', 'deductive-reasoning', 'analytical', 'Applying general rules to specific cases') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Creative Thinking', 'creative-thinking', 'creative', 'Finding unconventional solutions') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Problem Decomposition', 'problem-decomposition', 'analytical', 'Breaking complex problems into smaller parts') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Analogical Reasoning', 'analogical-reasoning', 'cognitive', 'Identifying relationships between pairs') ON CONFLICT (slug) DO NOTHING;
+-- INSERT INTO thinking_skills (name, slug, category, description) VALUES ('Decision Making', 'decision-making', 'analytical', 'Evaluating options and selecting the best course of action') ON CONFLICT (slug) DO NOTHING;

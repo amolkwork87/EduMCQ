@@ -1,4 +1,7 @@
-CREATE TABLE if not exists  questions (
+-- ============================================================
+-- 7. QUESTIONS (Main content table)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS questions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     exam_id         UUID REFERENCES exams(id) ON DELETE SET NULL,
     standard_id     UUID REFERENCES standards(id) ON DELETE SET NULL,
@@ -6,8 +9,8 @@ CREATE TABLE if not exists  questions (
     text            TEXT,
     image_url       VARCHAR(500),
     has_image_options BOOLEAN DEFAULT false,
-    difficulty      TEXT DEFAULT 'medium',
-    status          TEXT DEFAULT 'draft',
+    difficulty      VARCHAR(10) CHECK (difficulty IN ('easy', 'medium', 'hard')),
+    status              VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
     explanation     TEXT,
     exam_tags       VARCHAR(500),
     geogebra_xml    TEXT,
@@ -16,3 +19,11 @@ CREATE TABLE if not exists  questions (
     created_at      TIMESTAMPTZ DEFAULT now(),
     updated_at      TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX idx_questions_exam ON questions(exam_id);
+CREATE INDEX idx_questions_standard ON questions(standard_id);
+CREATE INDEX idx_questions_subject ON questions(subject_id);
+CREATE INDEX idx_questions_status ON questions(status);
+CREATE INDEX idx_questions_difficulty ON questions(difficulty);
+CREATE INDEX idx_questions_content_hash ON questions(content_hash);
+CREATE INDEX idx_questions_created_at ON questions(created_at DESC);

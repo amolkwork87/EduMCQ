@@ -193,9 +193,9 @@ public class ExcelImportService : IExcelImportService
         // Resolve hierarchy using cached lookups
         var examId = db.GetExamId(row.Exam ?? "")
             ?? throw new Exception($"Exam not found: '{row.Exam}'");
-        var standardId = db.GetStandardId(examId, row.Exam ?? "") //row.class 
+        var standardId = db.GetStandardId(examId, row.Class ?? "") //row.class 
             ?? throw new Exception($"Class not found: '{row.Exam}' under exam '{row.Exam}'");
-        var subjectId = db.GetSubjectId(examId, row.Exam ?? "") // row.subject
+        var subjectId = db.GetSubjectId(examId, row.Subject ?? "") // row.subject
             ?? throw new Exception($"Subject not found: '{row.Exam}' under exam '{row.Exam}'");
 
         Guid? topicId = null;

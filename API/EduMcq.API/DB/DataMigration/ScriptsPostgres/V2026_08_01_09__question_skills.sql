@@ -1,5 +1,10 @@
-CREATE TABLE if not exists  question_skills (
+-- ============================================================
+-- 10. QUESTION_SKILLS (M:N junction)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS question_skills (
     question_id     UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     skill_id        UUID NOT NULL REFERENCES thinking_skills(id) ON DELETE CASCADE,
     PRIMARY KEY (question_id, skill_id)
 );
+
+CREATE INDEX idx_qs_skill ON question_skills(skill_id);
