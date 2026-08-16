@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS questions (
     exam_id         UUID REFERENCES exams(id) ON DELETE SET NULL,
     standard_id     UUID REFERENCES standards(id) ON DELETE SET NULL,
     subject_id      UUID REFERENCES subjects(id) ON DELETE SET NULL,
+     topic_id        UUID REFERENCES topics(id) ON DELETE SET NULL,  -- NEW
+    concept_id      UUID REFERENCES concepts(id) ON DELETE SET NULL, -- NEW
     text            TEXT,
     image_url       VARCHAR(500),
     has_image_options BOOLEAN DEFAULT false,
@@ -27,3 +29,5 @@ CREATE INDEX idx_questions_status ON questions(status);
 CREATE INDEX idx_questions_difficulty ON questions(difficulty);
 CREATE INDEX idx_questions_content_hash ON questions(content_hash);
 CREATE INDEX idx_questions_created_at ON questions(created_at DESC);
+CREATE INDEX idx_questions_topic ON questions(topic_id);        -- NEW
+CREATE INDEX idx_questions_concept ON questions(concept_id);    -- NEW

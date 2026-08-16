@@ -86,7 +86,7 @@ public class ExcelImportService : IExcelImportService
         using var db = new Infrastructure.AppDb(_connectionString);
 
         var conn = await db.GetConnectionAsync();
-    await using var tx = await conn.BeginTransactionAsync();
+        await using var tx = await conn.BeginTransactionAsync();
 
         // Preload caches for this batch
         await db.PreloadCachesAsync(tx);
@@ -94,14 +94,14 @@ public class ExcelImportService : IExcelImportService
         try
         {
             // --- BULK INSERT: Questions ---
-            var validRows = new List<(QuestionRow row, Guid questionId, 
+            var validRows = new List<(QuestionRow row, Guid questionId,
             string hash, Guid examId, Guid standardId, Guid subjectId, Guid? topicId, Guid? conceptId)>();
 
             foreach (var row in rows)
             {
                 try
                 {
-                    var (questionId, hash, examId, standardId, subjectId, topicId, conceptId) = 
+                    var (questionId, hash, examId, standardId, subjectId, topicId, conceptId) =
                         await PrepareRowAsync(db, tx, row, duplicateHashes, newHashes, createdById);
 
                     if (questionId != Guid.Empty)
@@ -159,7 +159,7 @@ public class ExcelImportService : IExcelImportService
         return response;
     }
 
-    private async Task<(Guid questionId, string hash, Guid examId, Guid standardId, Guid subjectId, Guid? topicId, Guid? conceptId)> 
+    private async Task<(Guid questionId, string hash, Guid examId, Guid standardId, Guid subjectId, Guid? topicId, Guid? conceptId)>
         PrepareRowAsync(
             Infrastructure.AppDb db, NpgsqlTransaction tx,
             QuestionRow row, List<string> duplicateHashes, List<string> newHashes,
@@ -199,17 +199,43 @@ public class ExcelImportService : IExcelImportService
             ?? throw new Exception($"Subject not found: '{row.Exam}' under exam '{row.Exam}'");
 
         Guid? topicId = null;
+        Guid? conceptId = null;
+
         if (!string.IsNullOrWhiteSpace(row.Topic))
         {
-            topicId = db.GetTopicId(subjectId, row.Topic, row.Subtopic)
-                ?? throw new Exception($"Topic/Subtopic not found: '{row.Topic}' / '{row.Subtopic}'");
-        }
+            // If Subtopic exists, try to find it as a child of Topic
+            if (!string.IsNullOrWhiteSpace(row.Subtopic))
+            {
+                topicId = db.GetTopicId(subjectId, row.Topic, row.Subtopic);
 
-        Guid? conceptId = null;
-        if (!string.IsNullOrWhiteSpace(row.Concept) && topicId.HasValue)
+                // If subtopic not found, try to find just the topic
+                if (!topicId.HasValue)
+                {
+                    _logger.LogWarning($"Subtopic '{row.Subtopic}' not found under topic '{row.Topic}'. Trying to use topic as parent.");
+                    topicId = db.GetTopicId(subjectId, row.Topic);
+                }
+            }
+            else
+            {
+                // No subtopic, just find the topic
+                topicId = db.GetTopicId(subjectId, row.Topic);
+            }
+
+            if (!topicId.HasValue)
+            {
+                throw new Exception($"Topic not found: '{row.Topic}'{(string.IsNullOrWhiteSpace(row.Subtopic) ? "" : $" / '{row.Subtopic}'")} under subject '{row.Subject}'");
+            }
+
+            // Now find concept under the topic
+            if (!string.IsNullOrWhiteSpace(row.Concept))
+            {
+                conceptId = db.GetConceptId(topicId.Value, row.Concept)
+                    ?? throw new Exception($"Concept not found: '{row.Concept}' under topic '{row.Topic}'");
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(row.Concept))
         {
-            conceptId = db.GetConceptId(topicId.Value, row.Concept)
-                ?? throw new Exception($"Concept not found: '{row.Concept}' under topic '{row.Topic}'");
+            throw new Exception($"Concept '{row.Concept}' provided but Topic is missing");
         }
 
         var questionId = Guid.NewGuid();
@@ -229,7 +255,7 @@ public class ExcelImportService : IExcelImportService
 
         // Use COPY for bulk insert
         using var writer = await conn.BeginBinaryImportAsync(
-            @"COPY questions (id, exam_id, standard_id, subject_id, text, image_url, 
+            @"COPY questions (id, exam_id, standard_id, subject_id,topic_id,concept_id, text, image_url, 
                 has_image_options, difficulty, status, explanation, content_hash, created_by, created_at) 
             FROM STDIN (FORMAT BINARY)");
 
@@ -256,6 +282,8 @@ public class ExcelImportService : IExcelImportService
             await writer.WriteAsync(examId, NpgsqlTypes.NpgsqlDbType.Uuid);
             await writer.WriteAsync(standardId, NpgsqlTypes.NpgsqlDbType.Uuid);
             await writer.WriteAsync(subjectId, NpgsqlTypes.NpgsqlDbType.Uuid);
+            await writer.WriteAsync(topicId, NpgsqlTypes.NpgsqlDbType.Uuid);  // NEW
+            await writer.WriteAsync(conceptId, NpgsqlTypes.NpgsqlDbType.Uuid); // NEW
             await writer.WriteAsync((object?)row.QuestionText ?? DBNull.Value, NpgsqlTypes.NpgsqlDbType.Text);
             await writer.WriteAsync((object?)row.QuestionImageUrl ?? DBNull.Value, NpgsqlTypes.NpgsqlDbType.Text);
             await writer.WriteAsync(hasImageOptions, NpgsqlTypes.NpgsqlDbType.Boolean);
@@ -466,7 +494,7 @@ public class ExcelImportService : IExcelImportService
 
     private static string ComputeHash(params string[] parts)
     {
-        var normalized = parts.Select(p => 
+        var normalized = parts.Select(p =>
             p?.ToLower()
               .Replace("[^a-z0-9s]", " ")
               .Replace("s+", " ")

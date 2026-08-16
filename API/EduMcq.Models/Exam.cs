@@ -1,4 +1,5 @@
 namespace EduMcq.Models;
+
 public class Exam
 {
     public Guid Id { get; set; }
@@ -14,3 +15,5 @@ public class Exam
 
 public record CreateExamRequest(string Name, string? Slug = null, string? Description = null, string? LogoUrl = null, bool? IsActive = null, short? DisplayOrder = null);
 public record UpdateExamRequest(string? Name = null, string? Slug = null, string? Description = null, string? LogoUrl = null, bool? IsActive = null, short? DisplayOrder = null);
+
+public class ExamDto { public Guid Id { get; set; } public string Name { get; set; } = ""; public string Slug { get; set; } = ""; }

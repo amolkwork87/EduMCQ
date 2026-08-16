@@ -13,3 +13,5 @@ public class Standard
 
 public record CreateStandardRequest(string Name, string? Slug = null, short? DisplayOrder = null, bool? IsActive = null);
 public record UpdateStandardRequest(string? Name = null, string? Slug = null, short? DisplayOrder = null, bool? IsActive = null);
+
+public class StandardDto { public Guid Id { get; set; } public Guid ExamId { get; set; } public string Name { get; set; } = ""; }

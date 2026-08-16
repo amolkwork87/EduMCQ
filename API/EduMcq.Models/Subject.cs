@@ -1,4 +1,5 @@
 namespace EduMcq.Models;
+
 public class Subject
 {
     public Guid Id { get; set; }
@@ -12,3 +13,4 @@ public class Subject
 
 public record CreateSubjectRequest(string Name, string? Slug = null, short? DisplayOrder = null, bool? IsActive = null);
 public record UpdateSubjectRequest(string? Name = null, string? Slug = null, short? DisplayOrder = null, bool? IsActive = null);
+public class SubjectDto { public Guid Id { get; set; } public Guid ExamId { get; set; } public string Name { get; set; } = ""; }

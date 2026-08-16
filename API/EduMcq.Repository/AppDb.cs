@@ -49,8 +49,8 @@ public class AppDb : IDisposable
     private Dictionary<string, Guid>? _examCache;
     private Dictionary<(Guid examId, string name), Guid>? _standardCache;
     private Dictionary<(Guid examId, string name), Guid>? _subjectCache;
-    private Dictionary<(Guid subjectId, string name, string? parentName), Guid>? _topicCache;
-    private Dictionary<(Guid topicId, string name), Guid>? _conceptCache;
+    private Dictionary<(Guid subjectId, string name, string? parentName), Guid> _topicCache = new();
+    private Dictionary<Guid, Dictionary<string, Guid>> _conceptCache = new();
     private Dictionary<string, Guid>? _skillCache;
     private HashSet<string>? _hashCache;
 
@@ -87,24 +87,33 @@ public class AppDb : IDisposable
 
         // Preload all topics
         _topicCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT id, subject_id, name, COALESCE(parent_id::text, '') as parent FROM topics", conn, tx))
+        using (var cmd = new NpgsqlCommand("SELECT t.id, t.subject_id, t.name, p.name as parent_name FROM topics t LEFT JOIN topics p ON t.parent_id = p.id WHERE t.is_active = true", conn, tx))
         using (var reader = await cmd.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
-            {
-                var parentId = reader.GetString(3);
-                var parentName = string.IsNullOrEmpty(parentId) ? null : parentId;
-                _topicCache[(reader.GetGuid(1), reader.GetString(2), parentName)] = reader.GetGuid(0);
-            }
+        {
+            var subjectId = reader.GetGuid(1);
+            var name = reader.GetString(2);
+            var parentName = reader.IsDBNull(3) ? null : reader.GetString(3);
+            _topicCache[(subjectId, name, parentName)] = reader.GetGuid(0);
+        }
         }
 
         // Preload all concepts
         _conceptCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT id, topic_id, name FROM concepts", conn, tx))
-        using (var reader = await cmd.ExecuteReaderAsync())
+        using (var cmd = new NpgsqlCommand("SELECT id, topic_id, name FROM concepts WHERE is_active = true", conn, tx))
+        using (var conceptReader = await cmd.ExecuteReaderAsync())
         {
-            while (await reader.ReadAsync())
-                _conceptCache[(reader.GetGuid(1), reader.GetString(2))] = reader.GetGuid(0);
+            while (await conceptReader.ReadAsync())
+            {
+                 var topicId = conceptReader.GetGuid(1);
+            var name = conceptReader.GetString(2);
+            
+            if (!_conceptCache.ContainsKey(topicId))
+                _conceptCache[topicId] = new Dictionary<string, Guid>();
+            
+            _conceptCache[topicId][name] = conceptReader.GetGuid(0);
+            }
         }
 
         // Preload all thinking skills
@@ -146,25 +155,39 @@ public class AppDb : IDisposable
         return _subjectCache.TryGetValue((examId, name), out var id) ? id : null;
     }
 
-    public Guid? GetTopicId(Guid subjectId, string name, string? subtopicName = null)
+    public Guid? GetTopicId(Guid subjectId, string topicName, string? subtopicName = null)
     {
-        if (_topicCache == null) throw new InvalidOperationException("Caches not loaded.");
+        // First try to find the subtopic (if provided)
+        if (!string.IsNullOrWhiteSpace(subtopicName))
+        {
+            // Find the parent topic first
+            var parentTopicId = GetTopicId(subjectId, topicName);
+            if (parentTopicId.HasValue)
+            {
+                // Now find the subtopic under this parent
+                var key = (subjectId, subtopicName.Trim(), topicName.Trim());
+                if (_topicCache.TryGetValue(key, out var subtopicId))
+                    return subtopicId;
+            }
+            return null;
+        }
 
-        // Try exact match first
-        if (_topicCache.TryGetValue((subjectId, name, subtopicName), out var id))
-            return id;
-
-        // Try without parent
-        if (subtopicName != null && _topicCache.TryGetValue((subjectId, name, null), out id))
-            return id;
+        // Just find the topic by name (no parent)
+        var topicKey = (subjectId, topicName.Trim(), (string?)null);
+        if (_topicCache.TryGetValue(topicKey, out var topicId))
+            return topicId;
 
         return null;
     }
 
-    public Guid? GetConceptId(Guid topicId, string name)
+    public Guid? GetConceptId(Guid topicId, string conceptName)
     {
-        if (_conceptCache == null) throw new InvalidOperationException("Caches not loaded.");
-        return _conceptCache.TryGetValue((topicId, name), out var id) ? id : null;
+        if (_conceptCache.TryGetValue(topicId, out var concepts))
+        {
+            if (concepts.TryGetValue(conceptName.Trim(), out var conceptId))
+                return conceptId;
+        }
+        return null;
     }
 
     public List<Guid> GetSkillIds(string[] skillNames)

@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 using System.Data;
+using EduMcq.Models;
+using Newtonsoft.Json;
 
 namespace EduMCQ.API.Controllers
 {
@@ -90,78 +92,96 @@ namespace EduMCQ.API.Controllers
 
         // GET /api/test/questions?subject_id={guid}&standard_id={guid}&limit=10
         [HttpGet("questions")]
-        public async Task<IActionResult> GetQuestions(
-            [FromQuery] Guid subject_id, 
-            [FromQuery] Guid standard_id, 
-            [FromQuery] int limit = 10)
+public async Task<IActionResult> GetQuestions(
+    [FromQuery] Guid subject_id, 
+    [FromQuery] Guid standard_id, 
+    [FromQuery] int limit = 10)
+{
+    var questions = new List<QuestionDto>();
+    await using var connection = new NpgsqlConnection(_connectionString);
+    await connection.OpenAsync();
+
+    // Updated query with topic_id and concept_id directly in questions table
+    await using var command = new NpgsqlCommand(@"
+        SELECT 
+            q.id,
+            q.text AS question_text,
+            opt_a.text AS option_a,
+            opt_b.text AS option_b,
+            opt_c.text AS option_c,
+            opt_d.text AS option_d,
+            CASE 
+                WHEN opt_a.is_correct THEN 0
+                WHEN opt_b.is_correct THEN 1
+                WHEN opt_c.is_correct THEN 2
+                WHEN opt_d.is_correct THEN 3
+                ELSE -1
+            END AS correct_option,
+            q.explanation,
+            CASE 
+                WHEN q.difficulty = 'easy' THEN 1
+                WHEN q.difficulty = 'medium' THEN 2
+                WHEN q.difficulty = 'hard' THEN 3
+                ELSE 1
+            END AS difficulty,
+            t.name AS topic,
+            c.name AS concept,
+            ts.thinking_skill_names
+        FROM questions q
+        LEFT JOIN options opt_a ON q.id = opt_a.question_id AND opt_a.label = 'A'
+        LEFT JOIN options opt_b ON q.id = opt_b.question_id AND opt_b.label = 'B'
+        LEFT JOIN options opt_c ON q.id = opt_c.question_id AND opt_c.label = 'C'
+        LEFT JOIN options opt_d ON q.id = opt_d.question_id AND opt_d.label = 'D'
+        LEFT JOIN topics t ON q.topic_id = t.id
+        LEFT JOIN concepts c ON q.concept_id = c.id
+        LEFT JOIN LATERAL (
+            SELECT STRING_AGG(ts.name, ', ') AS thinking_skill_names
+            FROM question_skills qs
+            INNER JOIN thinking_skills ts ON qs.skill_id = ts.id
+            WHERE qs.question_id = q.id
+        ) ts ON true
+        WHERE q.subject_id = @subjectId
+          AND q.standard_id = @standardId
+          AND q.status = 'published'
+          AND q.text IS NOT NULL
+        ORDER BY RANDOM()
+        LIMIT @limit;", 
+        connection);
+
+    command.Parameters.AddWithValue("@subjectId", subject_id);
+    command.Parameters.AddWithValue("@standardId", standard_id);
+    command.Parameters.AddWithValue("@limit", limit);
+
+    await using var reader = await command.ExecuteReaderAsync();
+    while (await reader.ReadAsync())
+    {
+        questions.Add(new QuestionDto
         {
-            var questions = new List<QuestionDto>();
-            await using var connection = new NpgsqlConnection(_connectionString);
-            await connection.OpenAsync();
+            Id = reader.GetGuid(0),
+            QuestionText = reader.GetString(1),
+            OptionA = reader.IsDBNull(2) ? null : reader.GetString(2),
+            OptionB = reader.IsDBNull(3) ? null : reader.GetString(3),
+            OptionC = reader.IsDBNull(4) ? null : reader.GetString(4),
+            OptionD = reader.IsDBNull(5) ? null : reader.GetString(5),
+            CorrectOption = reader.GetInt32(6),  // 0=A, 1=B, 2=C, 3=D
+            Explanation = reader.IsDBNull(7) ? null : reader.GetString(7),
+            Difficulty = reader.GetInt32(8),     // 1=easy, 2=medium, 3=hard
+            Topic = reader.IsDBNull(9) ? null : reader.GetString(9),
+            Concept = reader.IsDBNull(10) ? null : reader.GetString(10),
+            ThinkingSkills = reader.IsDBNull(11) ? null : reader.GetString(11)
+        });
+    }
 
-            // KEY QUERY: Uses topic_standards junction table
-            await using var command = new NpgsqlCommand(@"
-                SELECT 
-                    q.id,
-                    q.question_text,
-                    q.option_a,
-                    q.option_b,
-                    q.option_c,
-                    q.option_d,
-                    q.correct_option,
-                    q.explanation,
-                    q.difficulty,
-                    t.name as topic_name,
-                    c.name as concept_name,
-                    ts.thinking_skill_names
-                FROM questions q
-                INNER JOIN topics t ON q.topic_id = t.id
-                INNER JOIN topic_standards ts_link ON t.id = ts_link.topic_id
-                LEFT JOIN concepts c ON q.concept_id = c.id
-                LEFT JOIN LATERAL (
-                    SELECT STRING_AGG(ts.name, ', ') as thinking_skill_names
-                    FROM question_thinking_skills qts
-                    INNER JOIN thinking_skills ts ON qts.thinking_skill_id = ts.id
-                    WHERE qts.question_id = q.id
-                ) ts ON true
-                WHERE t.subject_id = @subjectId
-                  AND ts_link.standard_id = @standardId
-                  AND q.is_active = true
-                ORDER BY RANDOM()
-                LIMIT @limit", 
-                connection);
-
-            command.Parameters.AddWithValue("subjectId", subject_id);
-            command.Parameters.AddWithValue("standardId", standard_id);
-            command.Parameters.AddWithValue("limit", limit);
-
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                questions.Add(new QuestionDto
-                {
-                    Id = reader.GetGuid(0),
-                    QuestionText = reader.GetString(1),
-                    OptionA = reader.IsDBNull(2) ? null : reader.GetString(2),
-                    OptionB = reader.IsDBNull(3) ? null : reader.GetString(3),
-                    OptionC = reader.IsDBNull(4) ? null : reader.GetString(4),
-                    OptionD = reader.IsDBNull(5) ? null : reader.GetString(5),
-                    CorrectOption = reader.GetInt32(6),  // 0=A, 1=B, 2=C, 3=D
-                    Explanation = reader.IsDBNull(7) ? null : reader.GetString(7),
-                    Difficulty = reader.GetInt32(8),
-                    Topic = reader.IsDBNull(9) ? null : reader.GetString(9),
-                    Concept = reader.IsDBNull(10) ? null : reader.GetString(10),
-                    ThinkingSkills = reader.IsDBNull(11) ? null : reader.GetString(11)
-                });
-            }
-
-            return Ok(questions);
-        }
+    return Ok(questions);
+}
 
         // POST /api/test/submit
         [HttpPost("submit")]
         public async Task<IActionResult> SubmitTest([FromBody] TestSubmissionDto submission)
         {
+            
+        var json = JsonConvert.SerializeObject(submission, Formatting.None);
+
             // Calculate results
             int correct = 0, wrong = 0, unanswered = 0;
             var questionResults = new List<QuestionResultDto>();
@@ -218,9 +238,30 @@ namespace EduMCQ.API.Controllers
             await using var connection = new NpgsqlConnection(_connectionString);
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand(@"
-                SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
-                       q.correct_option, q.explanation, q.difficulty, t.name, c.name
+                SELECT q.id, q.text AS question_text,
+            opt_a.text AS option_a,
+            opt_b.text AS option_b,
+            opt_c.text AS option_c,
+            opt_d.text AS option_d,
+                        CASE 
+                WHEN opt_a.is_correct THEN 0
+                WHEN opt_b.is_correct THEN 1
+                WHEN opt_c.is_correct THEN 2
+                WHEN opt_d.is_correct THEN 3
+                ELSE -1
+            END AS correct_option,
+            q.explanation,
+            CASE 
+                WHEN q.difficulty = 'easy' THEN 1
+                WHEN q.difficulty = 'medium' THEN 2
+                WHEN q.difficulty = 'hard' THEN 3
+                ELSE 1
+            END AS difficulty, t.name, c.name
                 FROM questions q
+				LEFT JOIN options opt_a ON q.id = opt_a.question_id AND opt_a.label = 'A'
+        LEFT JOIN options opt_b ON q.id = opt_b.question_id AND opt_b.label = 'B'
+        LEFT JOIN options opt_c ON q.id = opt_c.question_id AND opt_c.label = 'C'
+        LEFT JOIN options opt_d ON q.id = opt_d.question_id AND opt_d.label = 'D'
                 INNER JOIN topics t ON q.topic_id = t.id
                 LEFT JOIN concepts c ON q.concept_id = c.id
                 WHERE q.id = @id", connection);
@@ -291,69 +332,5 @@ namespace EduMCQ.API.Controllers
                 await ansCmd.ExecuteNonQueryAsync();
             }
         }
-    }
-
-    // ===================== DTOs =====================
-
-    public class ExamDto { public Guid Id { get; set; } public string Name { get; set; } = ""; public string Slug { get; set; } = ""; }
-    public class StandardDto { public Guid Id { get; set; } public Guid ExamId { get; set; } public string Name { get; set; } = ""; }
-    public class SubjectDto { public Guid Id { get; set; } public Guid ExamId { get; set; } public string Name { get; set; } = ""; }
-
-    public class QuestionDto
-    {
-        public Guid Id { get; set; }
-        public string QuestionText { get; set; } = "";
-        public string? OptionA { get; set; }
-        public string? OptionB { get; set; }
-        public string? OptionC { get; set; }
-        public string? OptionD { get; set; }
-        public int CorrectOption { get; set; }  // 0=A, 1=B, 2=C, 3=D
-        public string? Explanation { get; set; }
-        public int Difficulty { get; set; }
-        public string? Topic { get; set; }
-        public string? Concept { get; set; }
-        public string? ThinkingSkills { get; set; }
-    }
-
-    public class TestSubmissionDto
-    {
-        public Guid UserId { get; set; }
-        public Guid SubjectId { get; set; }
-        public Guid StandardId { get; set; }
-        public DateTime StartedAt { get; set; }
-        public int TimeTakenSeconds { get; set; }
-        public List<AnswerDto> Answers { get; set; } = new();
-    }
-
-    public class AnswerDto
-    {
-        public Guid QuestionId { get; set; }
-        public int? SelectedOption { get; set; }  // null = unanswered
-    }
-
-    public class TestResultDto
-    {
-        public int TotalQuestions { get; set; }
-        public int CorrectCount { get; set; }
-        public int WrongCount { get; set; }
-        public int UnansweredCount { get; set; }
-        public int ScorePercentage { get; set; }
-        public int TimeTakenSeconds { get; set; }
-        public List<QuestionResultDto> QuestionResults { get; set; } = new();
-    }
-
-    public class QuestionResultDto
-    {
-        public Guid QuestionId { get; set; }
-        public string QuestionText { get; set; } = "";
-        public string? Topic { get; set; }
-        public string? Concept { get; set; }
-        public int Difficulty { get; set; }
-        public string?[] Options { get; set; } = Array.Empty<string?>();
-        public int CorrectOption { get; set; }
-        public int? SelectedOption { get; set; }
-        public string? Explanation { get; set; }
-        public bool IsCorrect { get; set; }
-        public bool IsAnswered { get; set; }
-    }
+    }    
 }
