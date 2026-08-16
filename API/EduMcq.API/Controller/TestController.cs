@@ -125,21 +125,14 @@ public async Task<IActionResult> GetQuestions(
                 ELSE 1
             END AS difficulty,
             t.name AS topic,
-            c.name AS concept,
-            ts.thinking_skill_names
+            c.name AS concept
         FROM questions q
         LEFT JOIN options opt_a ON q.id = opt_a.question_id AND opt_a.label = 'A'
         LEFT JOIN options opt_b ON q.id = opt_b.question_id AND opt_b.label = 'B'
         LEFT JOIN options opt_c ON q.id = opt_c.question_id AND opt_c.label = 'C'
         LEFT JOIN options opt_d ON q.id = opt_d.question_id AND opt_d.label = 'D'
         LEFT JOIN topics t ON q.topic_id = t.id
-        LEFT JOIN concepts c ON q.concept_id = c.id
-        LEFT JOIN LATERAL (
-            SELECT STRING_AGG(ts.name, ', ') AS thinking_skill_names
-            FROM question_skills qs
-            INNER JOIN thinking_skills ts ON qs.skill_id = ts.id
-            WHERE qs.question_id = q.id
-        ) ts ON true
+        LEFT JOIN concepts c ON q.concept_id = c.id        
         WHERE q.subject_id = @subjectId
           AND q.standard_id = @standardId
           AND q.status = 'published'
@@ -167,8 +160,8 @@ public async Task<IActionResult> GetQuestions(
             Explanation = reader.IsDBNull(7) ? null : reader.GetString(7),
             Difficulty = reader.GetInt32(8),     // 1=easy, 2=medium, 3=hard
             Topic = reader.IsDBNull(9) ? null : reader.GetString(9),
-            Concept = reader.IsDBNull(10) ? null : reader.GetString(10),
-            ThinkingSkills = reader.IsDBNull(11) ? null : reader.GetString(11)
+            Concept = reader.IsDBNull(10) ? null : reader.GetString(10)
+            //ThinkingSkills = reader.IsDBNull(11) ? null : reader.GetString(11)
         });
     }
 

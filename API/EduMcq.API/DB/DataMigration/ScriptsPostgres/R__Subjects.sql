@@ -1,9 +1,0 @@
--- -- Subjects
--- INSERT INTO subjects (exam_id,name, slug, display_order) VALUES ('b9e10a6e-9f39-4f15-bf71-e22d251ce89e','SOF IMO', 'sof-imo',  1) ON CONFLICT  DO NOTHING;
--- INSERT INTO subjects (exam_id,name, slug, display_order) VALUES ('93d1d369-fe8d-402a-8bb7-c5b7f13e9729','SOF NSO', 'sof-nso',  2) ON CONFLICT  DO NOTHING;
--- INSERT INTO subjects (exam_id,name, slug, display_order) VALUES ('371f3d42-54f7-451f-8258-f60b31513247','SOF NCO', 'sof-nco',  3) ON CONFLICT  DO NOTHING;
--- INSERT INTO subjects (exam_id,name, slug, display_order) VALUES ('9c8e28fd-ca21-44aa-b2e1-69f00a9fe4f2','IOQM', 'ioqm',  4) ON CONFLICT  DO NOTHING;
--- INSERT INTO subjects (exam_id,name, slug, display_order) VALUES ('e4e7dc04-1d23-4961-b7c9-273952586b5b','IPM Mathemagic', 'ipm-mathemagic',  5) ON CONFLICT  DO NOTHING;
--- INSERT INTO subjects (exam_id,name, slug, display_order) VALUES ('d12bea36-bc0a-4a08-a94f-9dbed6554d7a','PRMO', 'prmo',  6) ON CONFLICT  DO NOTHING;
--- INSERT INTO subjects (exam_id,name, slug, display_order) VALUES ('7fbe8a1b-cf7c-4163-bd80-6b3aab8b832c','RMO', 'rmo',  7) ON CONFLICT  DO NOTHING;
--- INSERT INTO subjects (exam_id,name, slug, display_order) VALUES ('93b554bd-7603-4203-9782-e0d96c24088a','NMTC', 'nmtc', 8) ON CONFLICT  DO NOTHING;

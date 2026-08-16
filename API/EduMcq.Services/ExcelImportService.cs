@@ -136,7 +136,7 @@ public class ExcelImportService : IExcelImportService
             {
                 await BulkInsertQuestionsAsync(db, tx, validRows, createdById);
                 await BulkInsertOptionsAsync(db, tx, validRows);
-                await BulkInsertAssociationsAsync(db, tx, validRows);
+                //await BulkInsertAssociationsAsync(db, tx, validRows);
 
                 response.SuccessCount = validRows.Count;
                 response.NewHashes = newHashes;
