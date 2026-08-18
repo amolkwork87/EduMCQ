@@ -2,7 +2,6 @@ using System.Text;
 using EduMcq.Interfaces;
 using EduMcq.Repository;
 using EduMcq.Services;
-using EduMCQ.Services;
 using EvolveDb;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -11,6 +10,38 @@ using Npgsql;
 public static class ServiceCollection
 {
 
+//     public static void AddSwaggerConfiguration(this IServiceCollection services)
+//     {
+//         services.AddSwaggerGen(c =>
+// {
+//     c.SwaggerDoc("v1", new OpenApiInfo { Title = "EduMCQ API", Version = "v1" });
+
+//     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+//     {
+//         Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+//         Name = "Authorization",
+//         In = ParameterLocation.Header,
+//         Type = SecuritySchemeType.ApiKey,
+//         Scheme = "Bearer"
+//     });
+
+//     c.AddSecurityRequirement(new OpenApiSecurityRequirement
+//     {
+//         {
+//             new OpenApiSecurityScheme
+//             {
+//                 Reference = new OpenApiReference
+//                 {
+//                     Type = ReferenceType.SecurityScheme,
+//                     Id = "Bearer"
+//                 }
+//             },
+//             Array.Empty<string>()
+//         }
+//     });
+// });
+
+//     }
     public static void ApplyDbMigrations(this IApplicationBuilder app, string connectionString)
     {
         using var scope = app.ApplicationServices.CreateScope();
@@ -48,6 +79,10 @@ public static class ServiceCollection
         services.AddScoped<ITopicService, TopicService>();
         services.AddScoped<IStandardService, StandardService>();
         services.AddScoped<ISubjectService, SubjectService>();
+        services.AddScoped<OtpService>();
+        services.AddScoped<JwtService>();
+        services.AddScoped<SocialLoginService>();
+        services.AddScoped<UserService>();
     }
 
 
@@ -84,6 +119,18 @@ public static class ServiceCollection
 
         // Optional: Clock skew (useful in development)
         ClockSkew = TimeSpan.Zero
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
+            {
+                context.Response.Headers.Add("Token-Expired", "true");
+            }
+            return Task.CompletedTask;
+        }
     };
 });
 

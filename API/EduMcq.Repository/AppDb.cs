@@ -1,7 +1,7 @@
 using Npgsql;
 using System.Data;
 
-namespace EduMCQ.Infrastructure;
+namespace EduMcq.Infrastructure;
 
 public class AppDb : IDisposable
 {

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using Microsoft.Extensions.Configuration;
 
-namespace EduMCQ.Services;
+namespace EduMcq.Services;
 
 public class ExcelImportService : IExcelImportService
 {
