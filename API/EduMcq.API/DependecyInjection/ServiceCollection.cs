@@ -67,6 +67,9 @@ public static class ServiceCollection
         services.AddScoped<ITopicRepository, TopicRepository>();
         services.AddScoped<IStandardRepository, StandardRepository>();
         services.AddScoped<ISubjectRepository, SubjectRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IOtpRepository, OtpRepository>();
+        services.AddScoped<IExcelImportRepository, ExcelImportRepository>();
     }
 
     public static void AddServices(this IServiceCollection services)

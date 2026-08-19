@@ -2,14 +2,22 @@ using System.Data;
 using Microsoft.AspNetCore.Cors;
 using Npgsql;
 using Microsoft.Extensions.FileProviders;
+using DotNetEnv;
 
 
 // Load environment variables from .env file
-//Env.Load();
+Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+
+// 1. Load configuration in order (last one wins)
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
+    
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 
