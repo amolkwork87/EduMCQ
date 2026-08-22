@@ -73,7 +73,7 @@ public class UploadController : ControllerBase
         {
             var createdById = GetCurrentUserId(); // Implement based on your auth
             var result = await _excelImportService.ImportBatchAsync(
-                request.Rows, 
+                request.Rows,
                 request.DuplicateHashes ?? new List<string>(),
                 createdById);
 
@@ -106,38 +106,66 @@ public class UploadController : ControllerBase
     // --- Image upload (for individual image uploads from React) ---
     [HttpPost("upload-image")]
     [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> UploadImage(IFormFile file)
+    [RequestSizeLimit(30 * 1024 * 1024)]
+    public async Task<IActionResult> UploadImage([FromForm] List<IFormFile> files, [FromForm] bool isQuestionImage = true)
     {
-        if (file.Length > 2 * 1024 * 1024)
-            return BadRequest(new { error = "Image must be under 2 MB." });
+        
+         if (files == null || files.Count == 0)
+        return BadRequest(new { error = "No files received." });
 
-        var allowed = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg" };
+    var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg" };
+    var urls = new List<string>();
+    var fileNames = new List<string>();
+
+    foreach (var file in files)
+    {
+        if (file.Length == 0)
+            continue;
+
+        // Size check – 5 MB per file
+        if (file.Length > 5 * 1024 * 1024)
+            return BadRequest(new { error = $"{file.FileName} must be under 5 MB." });
+
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!allowed.Contains(ext))
-            return BadRequest(new { error = "Only PNG, JPG, WebP, SVG allowed." });
+        if (!allowedExtensions.Contains(ext))
+            return BadRequest(new { error = $"{file.FileName}: only PNG, JPG, WebP, SVG allowed." });
 
-        using var stream = file.OpenReadStream();
-        var url = await _imageImportService.UploadSingleAsync(stream, file.FileName);
-        return Ok(new { url });
+        // ---- Option A: keep using your existing service (recommended) ----
+        await using var stream = file.OpenReadStream();
+        var url = await _imageImportService.UploadSingleAsync(
+            stream,
+            file.FileName,
+            isQuestionImage ? "questions" : "answers");   // optional folder parameter
+
+
+        urls.Add(url);
+        fileNames.Add(file.FileName);
     }
 
-    // --- Presigned URL for S3 upload (React uploads directly to S3) ---
-    [HttpPost("presign-image")]
-    [IgnoreAntiforgeryToken]
-    public IActionResult PresignImage([FromBody] PresignRequest request)
+    return Ok(new
     {
-        // Implement with your S3/MinIO/R2 client
-        // Returns { presignedUrl, key }
-        var key = $"questions/{DateTime.UtcNow:yyyy/MM}/{Guid.NewGuid()}-{request.FileName}";
-        var presignedUrl = _imageImportService.GeneratePresignedUrl(key, request.ContentType);
-
-        return Ok(new
-        {
-            presignedUrl,
-            key,
-            expiresIn = 300 // 5 minutes
-        });
+        urls,           // array of public paths
+        fileNames       // original names (optional but useful for UI)
+    });
     }
+
+    // // --- Presigned URL for S3 upload (React uploads directly to S3) ---
+    // [HttpPost("presign-image")]
+    // [IgnoreAntiforgeryToken]
+    // public IActionResult PresignImage([FromBody] PresignRequest request)
+    // {
+    //     // Implement with your S3/MinIO/R2 client
+    //     // Returns { presignedUrl, key }
+    //     var key = $"questions/{DateTime.UtcNow:yyyy/MM}/{Guid.NewGuid()}-{request.FileName}";
+    //     var presignedUrl = _imageImportService.GeneratePresignedUrl(key, request.ContentType);
+
+    //     return Ok(new
+    //     {
+    //         presignedUrl,
+    //         key,
+    //         expiresIn = 300 // 5 minutes
+    //     });
+    // }
 
     private Guid? GetCurrentUserId()
     {

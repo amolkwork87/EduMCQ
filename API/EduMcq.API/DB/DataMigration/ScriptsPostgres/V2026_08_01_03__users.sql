@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     apple_id        VARCHAR(255) UNIQUE, -- Added for Apple Sign-In
     name            VARCHAR(200),
     role            TEXT DEFAULT 'student',
+    password_hash  TEXT, 
     avatar_url      VARCHAR(500),
     is_phone_verified  BOOLEAN DEFAULT false,
     is_email_verified  BOOLEAN DEFAULT false, -- Added for email verification

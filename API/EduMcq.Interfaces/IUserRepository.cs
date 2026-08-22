@@ -5,6 +5,7 @@ using EduMcq.Models;
 public interface IUserRepository
 {
 	Task<Guid?> GetActiveUserIdByEmailAsync(string email);
+	Task<User?> GetActiveUserByEmailAsync(string email);
 	Task CreatePasswordResetAsync(Guid userId, string email, string token, DateTime expiresAt);
 	Task<(Guid OtpId, Guid UserId)?> GetValidPasswordResetAsync(string token);
 	Task<bool> ResetPasswordAsync(Guid otpId, Guid userId, string passwordHash);

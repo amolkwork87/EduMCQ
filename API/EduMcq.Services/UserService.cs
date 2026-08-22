@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using EduMcq.Interfaces;
 using EduMcq.Models;
 using BCrypt.Net;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace EduMcq.Services;
 
@@ -10,10 +12,15 @@ public class UserService
     private readonly IUserRepository _userRepository;
     private readonly JwtService _jwtService;
 
-    public UserService(IUserRepository userRepository, JwtService jwtService)
+    private readonly IConfiguration _config;
+    private readonly ILogger<UserService> _logger;
+
+    public UserService(IUserRepository userRepository, JwtService jwtService,IConfiguration config, ILogger<UserService> logger)
     {
         _userRepository = userRepository;
         _jwtService = jwtService;
+        _config = config;
+        _logger = logger;
     }
 
     public async Task ForgotPasswordAsync(string email)
@@ -42,9 +49,9 @@ public class UserService
             return (false, "Email already registered", null);
         if (!string.IsNullOrEmpty(request.Phone) && await _userRepository.PhoneExistsAsync(request.Phone))
             return (false, "Phone already registered", null);
-        if (!string.IsNullOrEmpty(request.Phone) &&
-            !await _userRepository.IsPhoneRecentlyVerifiedAsync(request.Phone, "signup"))
-            return (false, "Please verify your phone number first", null);
+        // if (!string.IsNullOrEmpty(request.Phone) &&
+        //     !await _userRepository.IsPhoneRecentlyVerifiedAsync(request.Phone, "signup"))
+        //     return (false, "Please verify your phone number first", null);
 
         var user = await _userRepository.CreateUserAsync(request, BCrypt.Net.BCrypt.HashPassword(request.Password));
         var (accessToken, refreshToken) = _jwtService.GenerateTokens(user);
@@ -67,4 +74,32 @@ public class UserService
 
     public Task HandleRazorpayWebhookAsync(string eventType, string razorpaySubId, string status) =>
         _userRepository.HandleRazorpayWebhookAsync(eventType, razorpaySubId, status);
+
+    public async Task<(bool Success, string Message, object? Data)> LoginAsync(LoginRequest request, string? ipAddress = null)
+    {
+        try
+        {
+        var user = await _userRepository.GetActiveUserByEmailAsync(request.Email);
+        var (accessToken, refreshToken) = _jwtService.GenerateTokens(user);
+        var refreshExpiryDays = _config.GetValue<int>("Jwt:RefreshTokenExpiryDays", 30);
+        await _userRepository.SaveRefreshTokenAsync(user.UserId, refreshToken, DateTime.UtcNow.AddDays(refreshExpiryDays), ipAddress);
+
+        return (true, "Login successful", new AuthResponse
+        {
+            AccessToken = accessToken,
+            RefreshToken = refreshToken,
+            User = user,
+            ExpiresIn = _config.GetValue<int>("Jwt:AccessTokenExpiryMinutes", 60) * 60
+        });
+            
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Login  failed for {email}", request.Email);
+            return (false, "Invalid login details", null);
+        }
+
+
+        
+    }
 }

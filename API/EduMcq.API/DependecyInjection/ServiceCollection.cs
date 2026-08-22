@@ -54,7 +54,8 @@ public static class ServiceCollection
         {
             Locations = new[] { "DB/DataMigration" },
             IsEraseDisabled = true,
-            MetadataTableName = "edumcq_changelog"
+            MetadataTableName = "edumcq_changelog",
+            OutOfOrder = true
         };
 
         evolve.Migrate();
@@ -86,6 +87,7 @@ public static class ServiceCollection
         services.AddScoped<JwtService>();
         services.AddScoped<SocialLoginService>();
         services.AddScoped<UserService>();
+         services.AddScoped<ProgressService>();
     }
 
 

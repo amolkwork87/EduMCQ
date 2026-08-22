@@ -9,6 +9,10 @@ using DotNetEnv;
 Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 
+var uploadRoot = Path.Combine(builder.Environment.WebRootPath ?? "wwwroot", "images");
+Directory.CreateDirectory(Path.Combine(uploadRoot, "questions")); // question images
+Directory.CreateDirectory(Path.Combine(uploadRoot, "answers")); // answer images
+
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 
@@ -73,6 +77,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.ApplyDbMigrations(builder.Configuration["EduMcqDatabaseConnection"]);
 
 var summaries = new[]
 {
@@ -94,13 +99,14 @@ app.MapGet("/weatherforecast", () =>
 .WithName("GetWeatherForecast");
 
 
-app.ApplyDbMigrations(builder.Configuration["EduMcqDatabaseConnection"]);
+
 
 
 // app.UseHttpsRedirection();
+app.UseAuthentication(); 
+app.UseAuthorization();
 
-// app.UseAuthentication();   // ← Must come BEFORE UseAuthorization
-// app.UseAuthorization();
+app.UseStaticFiles();
 
 app.MapControllers();
 

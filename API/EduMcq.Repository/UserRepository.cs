@@ -1,7 +1,9 @@
+using System.Net;
 using EduMcq.Interfaces;
 using EduMcq.Models;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
+using NpgsqlTypes;
 
 namespace EduMcq.Repository;
 
@@ -13,6 +15,15 @@ public class UserRepository : IUserRepository
     {
         _connectionString = configuration["EduMcqDatabaseConnection"]
             ?? throw new InvalidOperationException("EduMcqDatabaseConnection is not configured.");
+    }
+
+    public async Task<User?> GetActiveUserByEmailAsync(string email)
+    {
+        await using var connection = await OpenConnectionAsync();
+        await using var command = new NpgsqlCommand("SELECT id, phone, email, name, role, avatar_url FROM users WHERE email = @email AND is_active = true", connection);
+        command.Parameters.AddWithValue("email", email);
+        await using var reader = await command.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? MapUser(reader) : null;
     }
 
     public async Task<Guid?> GetActiveUserIdByEmailAsync(string email)
@@ -119,9 +130,15 @@ public class UserRepository : IUserRepository
         if (!await reader.ReadAsync()) return null;
         return new Subscription
         {
-            Id = reader.GetGuid(0), UserId = reader.GetGuid(1), Plan = reader.GetString(2), Status = reader.GetString(3),
-            AmountPaise = reader.IsDBNull(4) ? null : reader.GetInt32(4), Currency = reader.GetString(5),
-            StartedAt = reader.GetDateTime(6), ExpiresAt = reader.GetDateTime(7), AutoRenew = reader.GetBoolean(8)
+            Id = reader.GetGuid(0),
+            UserId = reader.GetGuid(1),
+            Plan = reader.GetString(2),
+            Status = reader.GetString(3),
+            AmountPaise = reader.IsDBNull(4) ? null : reader.GetInt32(4),
+            Currency = reader.GetString(5),
+            StartedAt = reader.GetDateTime(6),
+            ExpiresAt = reader.GetDateTime(7),
+            AutoRenew = reader.GetBoolean(8)
         };
     }
 
@@ -156,7 +173,9 @@ public class UserRepository : IUserRepository
         var normalizedProvider = provider.ToLowerInvariant();
         var column = normalizedProvider switch
         {
-            "google" => "google_id", "facebook" => "facebook_id", "apple" => "apple_id",
+            "google" => "google_id",
+            "facebook" => "facebook_id",
+            "apple" => "apple_id",
             _ => throw new ArgumentException("Invalid provider", nameof(provider))
         };
         await using var connection = await OpenConnectionAsync();
@@ -209,11 +228,18 @@ public class UserRepository : IUserRepository
     public async Task SaveRefreshTokenAsync(Guid userId, string token, DateTime expiresAt, string? createdByIp)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand("INSERT INTO refresh_tokens (user_id, token, expires_at, created_by_ip) VALUES (@userId, @token, @expiresAt, @ip)", connection);
+        await using var command = new NpgsqlCommand("INSERT INTO refresh_tokens (user_id, token_hash, expires_at, ip_address) VALUES (@userId, @token, @expiresAt, @ip)", connection);
         command.Parameters.AddWithValue("userId", userId);
         command.Parameters.AddWithValue("token", token);
         command.Parameters.AddWithValue("expiresAt", expiresAt);
-        command.Parameters.AddWithValue("ip", (object?)createdByIp ?? DBNull.Value);
+        if (IPAddress.TryParse(createdByIp, out var ipAddress))
+        {
+            command.Parameters.AddWithValue("ip", NpgsqlDbType.Inet, ipAddress);
+        }
+        else
+        {
+            command.Parameters.AddWithValue("ip", DBNull.Value);
+        }
         await command.ExecuteNonQueryAsync();
     }
 

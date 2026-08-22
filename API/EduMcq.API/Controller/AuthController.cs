@@ -157,6 +157,23 @@ public class AuthController : ControllerBase
         return Ok(new { success = true, message = "Logged out from all devices" });
     }
 
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            return BadRequest(new { success = false, message = "Email and Password are required" });
+
+        var result = await _userService.LoginAsync(
+            request,
+            HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        if (!result.Success)
+            return BadRequest(new { success = false, message = result.Message });
+
+        //return Ok(new { success = true, message = result.Message, data = result.Data });
+        return Ok(result.Data);
+    }
+
     [HttpPost("social-login")]
     public async Task<IActionResult> SocialLogin([FromBody] SocialLoginRequest request)
     {
