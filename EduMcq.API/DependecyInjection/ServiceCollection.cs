@@ -42,24 +42,63 @@ public static class ServiceCollection
 // });
 
 //     }
-    public static void ApplyDbMigrations(this IApplicationBuilder app, string connectionString)
+    public static void ApplyDbMigrations(
+    this IApplicationBuilder app,
+    string connectionString)
+{
+    using var scope = app.ApplicationServices.CreateScope();
+
+    var logger = scope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("DBMigration");
+
+    if (string.IsNullOrWhiteSpace(connectionString))
     {
-        using var scope = app.ApplicationServices.CreateScope();
-        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
-            .CreateLogger("DBMigration");
+        throw new InvalidOperationException(
+            "EduMcqDatabaseConnection is missing or empty.");
+    }
+
+    logger.LogInformation(
+        "Database connection string received. Length: {Length}",
+        connectionString.Length);
+
+    try
+    {
         using var connection = new NpgsqlConnection(connectionString);
+
+        logger.LogInformation(
+            "Npgsql connection created. Host: {Host}, Database: {Database}",
+            connection.Host,
+            connection.Database);
+
         connection.Open();
 
-        var evolve = new Evolve(connection, msg => logger.LogInformation(msg))
+        logger.LogInformation("PostgreSQL connection opened successfully.");
+
+        var evolve = new Evolve(
+            connection,
+            msg => logger.LogInformation(msg))
         {
             Locations = new[] { "DB/DataMigration" },
             IsEraseDisabled = true,
             MetadataTableName = "edumcq_changelog",
-            OutOfOrder = true //Comment in production
+            OutOfOrder = true
         };
 
         evolve.Migrate();
+
+        logger.LogInformation("Database migrations completed successfully.");
     }
+    catch (Exception ex)
+    {
+        logger.LogError(
+            ex,
+            "Database migration failed. Exception: {ExceptionType}",
+            ex.GetType().FullName);
+
+        throw;
+    }
+}
 
     public static void AddRepositories(this IServiceCollection services)
     {
