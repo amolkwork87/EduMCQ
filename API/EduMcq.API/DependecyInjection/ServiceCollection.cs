@@ -55,7 +55,7 @@ public static class ServiceCollection
             Locations = new[] { "DB/DataMigration" },
             IsEraseDisabled = true,
             MetadataTableName = "edumcq_changelog",
-            OutOfOrder = true
+            OutOfOrder = true //Comment in production
         };
 
         evolve.Migrate();
@@ -71,6 +71,10 @@ public static class ServiceCollection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IOtpRepository, OtpRepository>();
         services.AddScoped<IExcelImportRepository, ExcelImportRepository>();
+        services.AddScoped<IImageRepository, ImageRepository>();
+        services.AddScoped<IArticleRepository, ArticleRepository>();
+        services.AddScoped<IProgressRepository, ProgressRepository>();
+        services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
     }
 
     public static void AddServices(this IServiceCollection services)
@@ -94,12 +98,6 @@ public static class ServiceCollection
     }
 
 
-
-    public static void AddSwagger(this IServiceCollection services)
-    {
-
-
-    }
 
     public static void JWTAuthentication(this IServiceCollection services, IConfiguration configuration)
     {

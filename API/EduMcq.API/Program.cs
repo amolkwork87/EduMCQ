@@ -1,8 +1,8 @@
 using System.Data;
-using Microsoft.AspNetCore.Cors;
-using Npgsql;
-using Microsoft.Extensions.FileProviders;
 using DotNetEnv;
+using Microsoft.AspNetCore.Cors;
+using Microsoft.Extensions.FileProviders;
+using Npgsql;
 
 
 // Load environment variables from .env file
@@ -13,8 +13,6 @@ var uploadRoot = Path.Combine(builder.Environment.WebRootPath ?? "wwwroot", "ima
 Directory.CreateDirectory(Path.Combine(uploadRoot, "questions")); // question images
 Directory.CreateDirectory(Path.Combine(uploadRoot, "answers")); // answer images
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 
 // 1. Load configuration in order (last one wins)
 builder.Configuration
@@ -49,15 +47,6 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // HTTPS only
 });
 
-// builder.Services.AddScoped<IDbConnection>(sp =>
-// {
-//     var conn = new NpgsqlConnection(
-//         builder.Configuration.GetConnectionString("DefaultConnection"));
-//     conn.Open();
-//     return conn;
-// });
-
-
 
 // Repositories
 builder.Services.AddRepositories();
@@ -79,29 +68,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.ApplyDbMigrations(builder.Configuration["EduMcqDatabaseConnection"]);
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-
-
-
-
 // app.UseHttpsRedirection();
 app.UseAuthentication(); 
 app.UseAuthorization();
@@ -111,7 +77,4 @@ app.UseStaticFiles();
 app.MapControllers();
 
 app.Run();
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+

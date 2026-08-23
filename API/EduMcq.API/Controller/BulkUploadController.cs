@@ -1,9 +1,11 @@
 using EduMcq.Interfaces;
 using EduMcq.Models.BulkUpload;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/admin/[controller]")]
+//[Authorize(Roles = "admin")]
 public class UploadController : ControllerBase
 {
     private readonly IExcelImportService _excelImportService;
@@ -72,6 +74,9 @@ public class UploadController : ControllerBase
         try
         {
             var createdById = GetCurrentUserId(); // Implement based on your auth
+            if (!createdById.HasValue)
+                return Unauthorized(new { error = "Invalid user identity." });
+
             var result = await _excelImportService.ImportBatchAsync(
                 request.Rows,
                 request.DuplicateHashes ?? new List<string>(),

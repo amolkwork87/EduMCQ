@@ -1,11 +1,13 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EduMcq.Controllers;
 
 [ApiController]
 [Route("api/admin")]
+//[Authorize]
 public class ExamController : ControllerBase
 {
     private readonly IExamService _examService;

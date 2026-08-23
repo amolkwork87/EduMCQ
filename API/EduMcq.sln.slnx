@@ -4,4 +4,5 @@
   <Project Path="EduMcq.Models/EduMcq.Models.csproj" />
   <Project Path="EduMcq.Repository/EduMcq.Repository.csproj" />
   <Project Path="EduMcq.Services/EduMcq.Services.csproj" />
+  <Project Path="EduMcq.Tests/EduMcq.Tests.csproj" />
 </Solution>

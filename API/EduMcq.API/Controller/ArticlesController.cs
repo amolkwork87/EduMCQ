@@ -1,9 +1,11 @@
 using EduMcq.Models;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/articles")]
+//[Authorize]
 public class ArticlesController : ControllerBase
 {
     private readonly ArticleService _service;
@@ -78,7 +80,8 @@ public class ArticlesController : ControllerBase
             return BadRequest(new { message = "Title and Content are required" });
 
         var userIdClaim = User.FindFirst("uid")?.Value;
-        Guid? createdBy = Guid.TryParse(userIdClaim, out var uid) ? uid : null;
+        if (!Guid.TryParse(userIdClaim ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var createdBy))
+            return Unauthorized(new { message = "Invalid user identity" });
 
         var article = await _service.CreateAsync(req, createdBy);
         return Ok(article);

@@ -1,16 +1,15 @@
 using EduMcq.Interfaces;
 using Microsoft.Extensions.Configuration;
-using Npgsql;
 
 public class ImageImportService: IImageImportService
 {
-    private readonly string _connectionString;
     private readonly string _rootPath;
+    private readonly IImageRepository _imageRepository;
 
-    public ImageImportService(IConfiguration config)
+    public ImageImportService(IConfiguration config, IImageRepository imageRepository)
     {
-        _connectionString = config["EduMcqDatabaseConnection"]!;
         _rootPath=config["ImageUploadPath"]!;
+        _imageRepository = imageRepository;
     }
 
     /// <summary>
@@ -45,43 +44,8 @@ public class ImageImportService: IImageImportService
         var contentType = GetContentType(ext);
         var isQuestionImage = subFolder.Equals("q", StringComparison.OrdinalIgnoreCase);
 
-        // 3. Insert metadata with Npgsql
-        const string sql = @"
-            INSERT INTO image_library (
-                image_url,
-                original_file_name,
-                stored_file_name,
-                content_type,
-                file_size_bytes,
-                is_question_image,
-                is_active,
-                created_at
-            ) VALUES (
-                @image_url,
-                @original_file_name,
-                @stored_file_name,
-                @content_type,
-                @file_size_bytes,
-                @is_question_image,
-                TRUE,
-                NOW()
-            )
-            RETURNING id;";
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-
-        cmd.Parameters.AddWithValue("image_url", publicUrl);
-        cmd.Parameters.AddWithValue("original_file_name", originalFileName);
-        cmd.Parameters.AddWithValue("stored_file_name", storedFileName);
-        cmd.Parameters.AddWithValue("content_type", contentType);
-        cmd.Parameters.AddWithValue("file_size_bytes", fileInfo.Length);
-        cmd.Parameters.AddWithValue("is_question_image", isQuestionImage);
-        //cmd.Parameters.AddWithValue("uploaded_by", (object?)GetCurrentUser() ?? DBNull.Value);
-
-        var id = await cmd.ExecuteScalarAsync();   // optional – you can ignore the returned id
+        await _imageRepository.InsertMetadataAsync(
+            publicUrl, originalFileName, storedFileName, contentType, fileInfo.Length, isQuestionImage);
 
         return publicUrl;
     }

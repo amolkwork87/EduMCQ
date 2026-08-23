@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/admin/images")]
-[Authorize(Roles = "Admin")]          // or [Authorize] + policy
+//[Authorize(Roles = "admin")]          // or [Authorize] + policy
 public class ImageController : ControllerBase
 {
     private readonly IWebHostEnvironment _env;

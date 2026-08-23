@@ -37,7 +37,7 @@ public class AuthController : ControllerBase
         var (success, message, debugOtp) = await _otpService.SendOtpAsync(request.Phone, request.Purpose);
 
         if (!success)
-            return BadRequest(new { message });
+            return StatusCode(StatusCodes.Status429TooManyRequests, new { message });
 
         var response = new { message, success = true };
 
@@ -58,7 +58,7 @@ public class AuthController : ControllerBase
             request.Phone, request.Otp, request.Purpose ?? "login");
 
         if (!success || user == null)
-            return BadRequest(new { success = false, message });
+            return Unauthorized(new { success = false, message });
 
         // Generate tokens
         var (accessToken, refreshToken) = _jwtService.GenerateTokens(user);
@@ -168,7 +168,7 @@ public class AuthController : ControllerBase
             HttpContext.Connection.RemoteIpAddress?.ToString());
 
         if (!result.Success)
-            return BadRequest(new { success = false, message = result.Message });
+            return Unauthorized(new { success = false, message = result.Message });
 
         //return Ok(new { success = true, message = result.Message, data = result.Data });
         return Ok(result.Data);
@@ -185,7 +185,7 @@ public class AuthController : ControllerBase
             HttpContext.Connection.RemoteIpAddress?.ToString());
 
         if (!result.Success)
-            return BadRequest(new { success = false, message = result.Message });
+            return Unauthorized(new { success = false, message = result.Message });
 
         //return Ok(new { success = true, message = result.Message, data = result.Data });
         return Ok(result.Data);
@@ -213,7 +213,7 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Password must be at least 8 characters" });
 
         var (success, error) = await _userService.ResetPasswordAsync(req.Token, req.NewPassword);
-        if (!success) return BadRequest(new { message = error });
+        if (!success) return Unauthorized(new { message = error });
 
         return Ok(new { message = "Password reset successful" });
     }

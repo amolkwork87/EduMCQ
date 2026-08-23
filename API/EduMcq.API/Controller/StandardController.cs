@@ -1,5 +1,6 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 
@@ -7,6 +8,7 @@ namespace EduMcq.Controllers;
 
 [ApiController]
 [Route("api/admin")]
+//[Authorize]
 public class StandardController : ControllerBase
 {
     private readonly IStandardService _standardService;
