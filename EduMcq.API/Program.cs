@@ -66,6 +66,18 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+var envValue = Environment.GetEnvironmentVariable("EduMcqDatabaseConnection");
+
+Console.WriteLine(
+    $"Environment variable exists: {!string.IsNullOrWhiteSpace(envValue)}");
+
+var connectionString =
+    builder.Configuration["EduMcqDatabaseConnection"];
+
+Console.WriteLine(
+    $"Configuration value exists: {!string.IsNullOrWhiteSpace(connectionString)}");
+
 app.ApplyDbMigrations(builder.Configuration["EduMcqDatabaseConnection"]);
 
 // app.UseHttpsRedirection();
