@@ -119,7 +119,7 @@ public class UserRepository : IUserRepository
         return new User { UserId = userId, Email = request.Email, MobileNumber = request.Phone, Name = name, Role = role, Status = "active" };
     }
 
-    public async Task<Subscription?> GetActiveSubscriptionAsync(Guid userId)
+    public async Task<SubscriptionDto?> GetActiveSubscriptionAsync(Guid userId)
     {
         await using var connection = await OpenConnectionAsync();
         await using var command = new NpgsqlCommand(@"SELECT id, user_id, plan, status, amount_paise, currency, started_at, expires_at, auto_renew
@@ -128,7 +128,7 @@ public class UserRepository : IUserRepository
         command.Parameters.AddWithValue("userId", userId);
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync()) return null;
-        return new Subscription
+        return new SubscriptionDto
         {
             Id = reader.GetGuid(0),
             UserId = reader.GetGuid(1),

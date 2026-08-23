@@ -13,7 +13,7 @@ public interface IUserRepository
 	Task<bool> PhoneExistsAsync(string phone);
 	Task<bool> IsPhoneRecentlyVerifiedAsync(string phone, string purpose);
 	Task<User> CreateUserAsync(SignupRequest request, string passwordHash);
-	Task<Subscription?> GetActiveSubscriptionAsync(Guid userId);
+	Task<SubscriptionDto?> GetActiveSubscriptionAsync(Guid userId);
 	Task<Guid> CreateSubscriptionAsync(Guid userId, string plan, int amountPaise);
 	Task HandleRazorpayWebhookAsync(string eventType, string razorpaySubscriptionId, string status);
 	Task<User> FindOrCreateSocialUserAsync(string provider, SocialUserInfo socialUser);

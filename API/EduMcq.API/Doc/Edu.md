@@ -30,4 +30,11 @@ B:  Pre-built Test | Admin creates fixed test, user takes by test ID | tests →
 
 
 
+-- Zero-downtime refresh (recommended)
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY edumcq.mv_user_progress;
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY edumcq.mv_user_topic_performance;
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY edumcq.mv_user_weekly_accuracy;
+
+
+
 

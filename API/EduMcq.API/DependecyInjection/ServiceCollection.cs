@@ -88,6 +88,9 @@ public static class ServiceCollection
         services.AddScoped<SocialLoginService>();
         services.AddScoped<UserService>();
          services.AddScoped<ProgressService>();
+         services.AddScoped<SubscriptionService>();
+         services.AddScoped<ArticleService>();
+
     }
 
 

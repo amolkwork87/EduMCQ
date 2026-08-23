@@ -63,7 +63,7 @@ public class UserService
         });
     }
 
-    public async Task<Subscription?> GetActiveSubscriptionAsync(Guid userId) =>
+    public async Task<SubscriptionDto?> GetActiveSubscriptionAsync(Guid userId) =>
         await _userRepository.GetActiveSubscriptionAsync(userId);
 
     public async Task<(bool Success, string? Error, object? Data)> CreateSubscriptionAsync(Guid userId, string plan, int amountPaise)
