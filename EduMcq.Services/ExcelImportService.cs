@@ -3,48 +3,48 @@ using System.Text;
 using ClosedXML.Excel;
 using EduMcq.Interfaces;
 using EduMcq.Models.BulkUpload;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace EduMcq.Services;
 
 public class ExcelImportService : IExcelImportService
 {
-    private readonly string _connectionString;
     private readonly ILogger<ExcelImportService> _logger;
     private readonly IExcelImportRepository _excelImportRepository;
+    private readonly Infrastructure.AppDb _db;
 
-    public ExcelImportService(IConfiguration configuration, ILogger<ExcelImportService> logger, IExcelImportRepository excelImportRepository)
+    public ExcelImportService(
+        ILogger<ExcelImportService> logger,
+        IExcelImportRepository excelImportRepository,
+        Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"]
-            ?? throw new InvalidOperationException("Configuration key 'EduMcqDatabaseConnection' is missing.");
         _logger = logger;
         _excelImportRepository = excelImportRepository;
+        _db = db;
     }
 
-    public async Task<BulkUploadResult> ImportAsync(Stream excelStream, Dictionary<string, string>? imageMap = null, Guid? createdById = null)
-    {
-        var result = new BulkUploadResult();
-        var rows = ParseExcel(excelStream);
-        result.TotalRows = rows.Count;
-        return result;
-    }
+    // public async Task<BulkUploadResult> ImportAsync(Stream excelStream, Dictionary<string, string>? imageMap = null, Guid? createdById = null)
+    // {
+    //     var result = new BulkUploadResult();
+    //     var rows = ParseExcel(excelStream);
+    //     result.TotalRows = rows.Count;
+    //     return result;
+    // }
 
     public async Task<BatchUploadResponse> ImportBatchAsync(List<QuestionRow> rows, List<string> duplicateHashes, Guid? createdById = null)
     {
         var response = new BatchUploadResponse();
         var newHashes = new List<string>();
         var validRows = new List<PreparedQuestion>();
-        using var db = new Infrastructure.AppDb(_connectionString);
-        var connection = await db.GetConnectionAsync();
+        var connection = await _db.GetConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        await db.PreloadCachesAsync(transaction);
+        await _db.PreloadCachesAsync(transaction);
 
         foreach (var row in rows)
         {
             try
             {
-                var prepared = PrepareRow(db, row, duplicateHashes, newHashes, createdById);
+                var prepared = PrepareRow(_db, row, duplicateHashes, newHashes, createdById);
                 if (prepared == null)
                 {
                     response.DuplicateCount++;

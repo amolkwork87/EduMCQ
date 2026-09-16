@@ -18,4 +18,7 @@ public interface IUserRepository
 	Task HandleRazorpayWebhookAsync(string eventType, string razorpaySubscriptionId, string status);
 	Task<User> FindOrCreateSocialUserAsync(string provider, SocialUserInfo socialUser);
 	Task SaveRefreshTokenAsync(Guid userId, string token, DateTime expiresAt, string? createdByIp);
+
+	Task<UserProfileDto?> GetByIdAsync(Guid userId);
+	Task UpdateProfileAsync(Guid userId, UpdateProfileDto dto);
 }

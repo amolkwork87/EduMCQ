@@ -1,6 +1,5 @@
 using EduMcq.Interfaces;
 using EduMcq.Models.BulkUpload;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace EduMcq.Repository;
@@ -9,10 +8,9 @@ public class ExcelImportRepository : IExcelImportRepository
 {
     private readonly string _connectionString;
 
-    public ExcelImportRepository(IConfiguration configuration)
+    public ExcelImportRepository(Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"]
-            ?? throw new InvalidOperationException("EduMcqDatabaseConnection is not configured.");
+        _connectionString = db.ConnectionString;
     }
 
     public async Task PersistBatchAsync(IReadOnlyList<PreparedQuestion> questions, Guid? createdById)

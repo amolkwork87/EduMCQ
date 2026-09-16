@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
+namespace EduMcq.API.Controllers;
 
 [ApiController]
 [Route("api")]

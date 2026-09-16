@@ -4,11 +4,11 @@ using EduMcq.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-
+namespace EduMcq.API.Controllers;
 
 [ApiController]
 [Route("api/subscriptions")]
-//[Authorize]
+[Authorize]
 public class SubscriptionsController : ControllerBase
 {
     private readonly SubscriptionService _subscriptionService;
@@ -55,6 +55,17 @@ public class SubscriptionsController : ControllerBase
         if (!success) return BadRequest(new { message = error });
         return Ok(new { message = "Subscription cancelled" });
     }
+
+    [HttpGet("me/eligibility")]
+    public async Task<IActionResult> CanTakeMockTestAsync()
+    {
+        if (!TryGetUserId(out var userId))
+            return Unauthorized(new { message = "Invalid user identity" });
+    return Ok(await _subscriptionService.CanUserTakeTestAsync(userId));
+    
+    }
+
+
 
     private bool TryGetUserId(out Guid userId)
     {

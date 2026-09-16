@@ -1,7 +1,7 @@
 using System.Net;
+using System.Text.Json;
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -11,10 +11,9 @@ public class UserRepository : IUserRepository
 {
     private readonly string _connectionString;
 
-    public UserRepository(IConfiguration configuration)
+    public UserRepository(Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"]
-            ?? throw new InvalidOperationException("EduMcqDatabaseConnection is not configured.");
+        _connectionString = db.ConnectionString;
     }
 
     public async Task<User?> GetActiveUserByEmailAsync(string email)
@@ -276,4 +275,67 @@ public class UserRepository : IUserRepository
         Status = "active",
         AvatarUrl = reader.IsDBNull(5) ? null : reader.GetString(5)
     };
+
+    public async Task<UserProfileDto?> GetByIdAsync(Guid userId)
+    {
+        const string sql = @"
+            SELECT id, name, email, phone, school_name, class_standard,
+                   target_exam_id, avatar_url, preferred_language
+                   
+            FROM users
+            WHERE id = @id AND is_active = true;";
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("id", userId);
+
+        await using var r = await cmd.ExecuteReaderAsync();
+        if (!await r.ReadAsync()) return null;
+
+        return new UserProfileDto
+        {
+            Id               = r.GetGuid(0),
+            Name             = r.IsDBNull(1) ? null : r.GetString(1),
+            Email            = r.IsDBNull(2) ? null : r.GetString(2),
+            Phone            = r.IsDBNull(3) ? null : r.GetString(3),
+            SchoolName       = r.IsDBNull(4) ? null : r.GetString(4),
+            ClassStandard    = r.IsDBNull(5) ? null : r.GetString(5),
+            TargetExamId     = r.IsDBNull(6) ? null : r.GetGuid(6),
+            AvatarUrl        = r.IsDBNull(7) ? null : r.GetString(7),
+            PreferredLanguage= r.IsDBNull(8) ? "en" : r.GetString(8),
+            //Preferences      = r.IsDBNull(9) ? null : JsonSerializer.Deserialize<object>(r.GetString(9))
+        };
+    }
+
+    public async Task UpdateProfileAsync(Guid userId, UpdateProfileDto dto)
+    {
+        const string sql = @"
+            UPDATE users SET
+                name            = COALESCE(@name, name),
+                phone           = COALESCE(@phone, phone),
+                school_name     = COALESCE(@schoolName, school_name),
+                class_standard  = COALESCE(@classStandard, class_standard),
+                target_exam_id  = @targetExamId,
+                --preferences     = COALESCE(@preferences::jsonb, preferences),
+                updated_at      = now()
+            WHERE id = @id;";
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, conn);
+
+        cmd.Parameters.AddWithValue("id", userId);
+        cmd.Parameters.AddWithValue("name", (object?)dto.Name ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("phone", (object?)dto.Phone ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("schoolName", (object?)dto.SchoolName ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("classStandard", (object?)dto.ClassStandard ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("targetExamId", (object?)dto.TargetExamId ?? DBNull.Value);
+        // cmd.Parameters.AddWithValue("preferences",
+        //     dto.Preferences == null
+        //         ? DBNull.Value
+        //         : JsonSerializer.Serialize(dto.Preferences));
+
+        await cmd.ExecuteNonQueryAsync();
+    }
 }

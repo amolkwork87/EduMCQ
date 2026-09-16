@@ -15,7 +15,7 @@ public class UserService
     private readonly IConfiguration _config;
     private readonly ILogger<UserService> _logger;
 
-    public UserService(IUserRepository userRepository, JwtService jwtService,IConfiguration config, ILogger<UserService> logger)
+    public UserService(IUserRepository userRepository, JwtService jwtService, IConfiguration config, ILogger<UserService> logger)
     {
         _userRepository = userRepository;
         _jwtService = jwtService;
@@ -54,6 +54,7 @@ public class UserService
         //     return (false, "Please verify your phone number first", null);
 
         var user = await _userRepository.CreateUserAsync(request, BCrypt.Net.BCrypt.HashPassword(request.Password));
+        await _userRepository.CreateSubscriptionAsync(user.UserId, "free", 999);
         var (accessToken, refreshToken) = _jwtService.GenerateTokens(user);
         return (true, null, new
         {
@@ -63,35 +64,24 @@ public class UserService
         });
     }
 
-    public async Task<SubscriptionDto?> GetActiveSubscriptionAsync(Guid userId) =>
-        await _userRepository.GetActiveSubscriptionAsync(userId);
-
-    public async Task<(bool Success, string? Error, object? Data)> CreateSubscriptionAsync(Guid userId, string plan, int amountPaise)
-    {
-        var subscriptionId = await _userRepository.CreateSubscriptionAsync(userId, plan, amountPaise);
-        return (true, null, new { SubscriptionId = subscriptionId, Status = "pending" });
-    }
-
-    public Task HandleRazorpayWebhookAsync(string eventType, string razorpaySubId, string status) =>
-        _userRepository.HandleRazorpayWebhookAsync(eventType, razorpaySubId, status);
 
     public async Task<(bool Success, string Message, object? Data)> LoginAsync(LoginRequest request, string? ipAddress = null)
     {
         try
         {
-        var user = await _userRepository.GetActiveUserByEmailAsync(request.Email);
-        var (accessToken, refreshToken) = _jwtService.GenerateTokens(user);
-        var refreshExpiryDays = _config.GetValue<int>("Jwt:RefreshTokenExpiryDays", 30);
-        await _userRepository.SaveRefreshTokenAsync(user.UserId, refreshToken, DateTime.UtcNow.AddDays(refreshExpiryDays), ipAddress);
+            var user = await _userRepository.GetActiveUserByEmailAsync(request.Email);
+            var (accessToken, refreshToken) = _jwtService.GenerateTokens(user);
+            var refreshExpiryDays = _config.GetValue<int>("Jwt:RefreshTokenExpiryDays", 30);
+            await _userRepository.SaveRefreshTokenAsync(user.UserId, refreshToken, DateTime.UtcNow.AddDays(refreshExpiryDays), ipAddress);
 
-        return (true, "Login successful", new AuthResponse
-        {
-            AccessToken = accessToken,
-            RefreshToken = refreshToken,
-            User = user,
-            ExpiresIn = _config.GetValue<int>("Jwt:AccessTokenExpiryMinutes", 60) * 60
-        });
-            
+            return (true, "Login successful", new AuthResponse
+            {
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                User = user,
+                ExpiresIn = _config.GetValue<int>("Jwt:AccessTokenExpiryMinutes", 60) * 60
+            });
+
         }
         catch (Exception exception)
         {
@@ -100,6 +90,17 @@ public class UserService
         }
 
 
-        
+
+    }
+
+    public async Task<UserProfileDto?> GetProfileAsync(Guid currentUserId)
+    {
+        return await _userRepository.GetByIdAsync(currentUserId);
+
+    }
+
+    public async Task UpdateProfileAsync(Guid currentUserId, UpdateProfileDto userDto)
+    {
+        await _userRepository.UpdateProfileAsync(currentUserId, userDto);
     }
 }

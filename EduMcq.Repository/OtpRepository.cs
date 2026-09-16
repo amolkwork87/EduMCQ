@@ -1,7 +1,8 @@
+using System.Net;
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
+using NpgsqlTypes;
 
 namespace EduMcq.Repository;
 
@@ -9,10 +10,9 @@ public class OtpRepository : IOtpRepository
 {
     private readonly string _connectionString;
 
-    public OtpRepository(IConfiguration configuration)
+    public OtpRepository(Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"]
-            ?? throw new InvalidOperationException("EduMcqDatabaseConnection is not configured.");
+        _connectionString = db.ConnectionString;
     }
 
     public async Task<int> CountRecentOtpsAsync(string phone)
@@ -45,7 +45,8 @@ public class OtpRepository : IOtpRepository
         await using var connection = await OpenConnectionAsync();
         await using var command = new NpgsqlCommand(@"SELECT id, otp_code, expires_at, is_used, attempts FROM otp_verifications
             WHERE phone = @phone AND purpose = @purpose AND is_used = false ORDER BY created_at DESC LIMIT 1", connection);
-        command.Parameters.AddWithValue("phone", phone); command.Parameters.AddWithValue("purpose", purpose);
+        command.Parameters.AddWithValue("phone", phone); 
+        command.Parameters.AddWithValue("purpose", purpose);
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync()
             ? (reader.GetGuid(0), reader.GetString(1), reader.GetDateTime(2), reader.GetBoolean(3), reader.GetInt32(4))
@@ -97,21 +98,46 @@ public class OtpRepository : IOtpRepository
     public async Task SaveRefreshTokenAsync(Guid userId, string token, DateTime expiresAt, string? createdByIp)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand("INSERT INTO refresh_tokens (user_id, token, expires_at, created_by_ip) VALUES (@userId, @token, @expiresAt, @ip)", connection);
-        command.Parameters.AddWithValue("userId", userId); command.Parameters.AddWithValue("token", token); command.Parameters.AddWithValue("expiresAt", expiresAt); command.Parameters.AddWithValue("ip", (object?)createdByIp ?? DBNull.Value);
+        await using var command = new NpgsqlCommand("INSERT INTO refresh_tokens (user_id, token_hash, expires_at, ip_address) VALUES (@userId, @token, @expiresAt, @ip)", connection);
+        command.Parameters.AddWithValue("userId", userId); 
+        command.Parameters.AddWithValue("token", token); 
+        command.Parameters.AddWithValue("expiresAt", expiresAt); 
+        if (IPAddress.TryParse(createdByIp, out var ipAddress))
+        {
+            command.Parameters.AddWithValue("ip", NpgsqlDbType.Inet, ipAddress);
+        }
+        else
+        {
+            command.Parameters.AddWithValue("ip", DBNull.Value);
+        }
         await command.ExecuteNonQueryAsync();
     }
 
     public async Task<(Guid UserId, DateTime ExpiresAt, DateTime? RevokedAt)?> GetRefreshTokenAsync(string token)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand("SELECT user_id, expires_at, revoked_at FROM refresh_tokens WHERE token = @token", connection);
+        await using var command = new NpgsqlCommand("SELECT user_id, expires_at, revoked_at FROM refresh_tokens WHERE token_hash = @token", connection);
         command.Parameters.AddWithValue("token", token);
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync() ? (reader.GetGuid(0), reader.GetDateTime(1), reader.IsDBNull(2) ? null : reader.GetDateTime(2)) : null;
     }
 
-    public Task RevokeRefreshTokenAsync(string token, string? revokedByIp) => ExecuteAsync("UPDATE refresh_tokens SET revoked_at = NOW(), revoked_by_ip = @ip WHERE token = @token AND revoked_at IS NULL", ("token", token), ("ip", (object?)revokedByIp ?? DBNull.Value));
+    public async Task RevokeRefreshTokenAsync(string token, string? revokedByIp)
+    {
+        
+        await using var connection = await OpenConnectionAsync();
+        await using var command = new NpgsqlCommand("UPDATE refresh_tokens SET revoked_at = NOW(), ip_address = @ip WHERE token_hash = @token AND revoked_at IS NULL", connection);
+        command.Parameters.AddWithValue("token", token);
+        if (IPAddress.TryParse(revokedByIp, out var ipAddress))
+        {
+            command.Parameters.AddWithValue("ip", NpgsqlDbType.Inet, ipAddress);
+        }
+        else
+        {
+            command.Parameters.AddWithValue("ip", DBNull.Value);
+        }
+        await command.ExecuteNonQueryAsync();
+    } 
     public Task RevokeAllRefreshTokensAsync(Guid userId) => ExecuteAsync("UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = @userId AND revoked_at IS NULL", "userId", userId);
 
     private async Task ExecuteAsync(string sql, string name, object value) => await ExecuteAsync(sql, (name, value));

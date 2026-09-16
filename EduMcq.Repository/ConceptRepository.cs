@@ -1,6 +1,5 @@
 using EduMcq.Models;
 using EduMcq.Interfaces;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace EduMcq.Repository;
@@ -10,9 +9,9 @@ public class ConceptRepository : IConceptRepository
     private const string Columns = "id, topic_id, name, description, display_order, is_active, created_at";
     private readonly string _connectionString;
 
-    public ConceptRepository(IConfiguration configuration)
+    public ConceptRepository(Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"] ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+        _connectionString = db.ConnectionString;
     }
 
     public async Task<List<Concept>> GetConceptsAsync(Guid topicId, bool activeOnly = true)

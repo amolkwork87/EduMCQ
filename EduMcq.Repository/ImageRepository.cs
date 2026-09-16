@@ -1,5 +1,4 @@
 using EduMcq.Interfaces;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace EduMcq.Repository;
@@ -8,10 +7,9 @@ public class ImageRepository : IImageRepository
 {
     private readonly string _connectionString;
 
-    public ImageRepository(IConfiguration configuration)
+    public ImageRepository(Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"]
-            ?? throw new InvalidOperationException("EduMcqDatabaseConnection is not configured.");
+        _connectionString = db.ConnectionString;
     }
 
     public async Task InsertMetadataAsync(string publicUrl, string originalFileName, string storedFileName,

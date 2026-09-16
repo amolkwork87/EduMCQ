@@ -4,6 +4,8 @@ using EduMcq.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace EduMcq.API.Controllers;
+
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase

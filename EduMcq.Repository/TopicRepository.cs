@@ -1,6 +1,5 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -11,9 +10,9 @@ public class TopicRepository : ITopicRepository
     private const string Columns = "id, subject_id, parent_id, name, slug, depth_level, display_order, is_active, created_at";
     private readonly string _connectionString;
 
-    public TopicRepository(IConfiguration configuration)
+    public TopicRepository(Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"] ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+        _connectionString = db.ConnectionString;
     }
 
     public async Task<List<Topic>> GetTopicsAsync(Guid subjectId, Guid? parentId, bool activeOnly = true)

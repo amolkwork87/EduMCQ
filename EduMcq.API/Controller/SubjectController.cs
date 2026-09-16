@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 
-namespace EduMcq.Controllers;
+namespace EduMcq.API.Controllers;
 
 [ApiController]
 [Route("api/admin")]
-//[Authorize]
+[Authorize]
 public class SubjectController : ControllerBase
 {
     private readonly ISubjectService _subjectService;

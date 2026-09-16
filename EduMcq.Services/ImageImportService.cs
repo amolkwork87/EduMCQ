@@ -1,5 +1,6 @@
 using EduMcq.Interfaces;
 using Microsoft.Extensions.Configuration;
+using SixLabors.ImageSharp;
 
 public class ImageImportService: IImageImportService
 {
@@ -22,9 +23,28 @@ public class ImageImportService: IImageImportService
     {
         // 1. Validate & prepare unique name
         var ext = Path.GetExtension(originalFileName).ToLowerInvariant();
-        var allowed = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg" };
+        var allowed = new[] { ".png", ".jpg", ".jpeg", ".webp" };
         if (!allowed.Contains(ext))
-            throw new ArgumentException("Only PNG, JPG, WebP, SVG allowed.");
+            throw new ArgumentException("Only PNG, JPG, and WebP images are allowed.");
+
+        if (!stream.CanRead)
+            throw new ArgumentException("The uploaded image cannot be read.");
+
+        MemoryStream? bufferedStream = null;
+        if (!stream.CanSeek)
+        {
+            bufferedStream = new MemoryStream();
+            await stream.CopyToAsync(bufferedStream);
+            bufferedStream.Position = 0;
+            stream = bufferedStream;
+        }
+
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        await ValidateImageAsync(stream, ext);
+        if (stream.CanSeek)
+            stream.Position = 0;
 
         var storedFileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}{ext}";
         var relativeFolder = Path.Combine("images", subFolder);
@@ -47,7 +67,38 @@ public class ImageImportService: IImageImportService
         await _imageRepository.InsertMetadataAsync(
             publicUrl, originalFileName, storedFileName, contentType, fileInfo.Length, isQuestionImage);
 
+        bufferedStream?.Dispose();
         return publicUrl;
+    }
+
+    private static async Task ValidateImageAsync(Stream stream, string extension)
+    {
+        var header = new byte[12];
+        var bytesRead = await stream.ReadAsync(header.AsMemory(0, header.Length));
+        stream.Position = 0;
+
+        var hasValidSignature = extension == ".png"
+            ? bytesRead >= 8 && header.AsSpan(0, 8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 })
+            : extension is ".jpg" or ".jpeg"
+                ? bytesRead >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff
+                : bytesRead >= 12
+                    && header.AsSpan(0, 4).SequenceEqual("RIFF"u8)
+                    && header.AsSpan(8, 4).SequenceEqual("WEBP"u8);
+
+        if (!hasValidSignature)
+            throw new ArgumentException("The file content does not match its image type.");
+
+        try
+        {
+            _ = await Image.DetectFormatAsync(stream)
+                ?? throw new ArgumentException("The image format could not be detected.");
+            stream.Position = 0;
+            using var image = await Image.LoadAsync(stream);
+        }
+        catch (Exception exception) when (exception is not ArgumentException)
+        {
+            throw new ArgumentException("The uploaded file is not a valid decoded image.", exception);
+        }
     }
 
     private static string GetContentType(string ext) => ext switch
@@ -55,7 +106,6 @@ public class ImageImportService: IImageImportService
         ".png"  => "image/png",
         ".jpg"  or ".jpeg" => "image/jpeg",
         ".webp" => "image/webp",
-        ".svg"  => "image/svg+xml",
         _       => "application/octet-stream"
     };
 

@@ -1,6 +1,5 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace EduMcq.Repository;
@@ -15,10 +14,9 @@ public class SubscriptionRepository : ISubscriptionRepository
         ["elite"] = -1
     };
 
-    public SubscriptionRepository(IConfiguration configuration)
+    public SubscriptionRepository(Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"]
-            ?? throw new InvalidOperationException("EduMcqDatabaseConnection is not configured.");
+        _connectionString = db.ConnectionString;
     }
 
     public async Task<SubscriptionDto> GetActiveSubscriptionAsync(Guid userId)

@@ -3,9 +3,11 @@ using EduMcq.Models.BulkUpload;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace EduMcq.API.Controllers;
+
 [ApiController]
 [Route("api/admin/[controller]")]
-//[Authorize(Roles = "admin")]
+[Authorize(Roles = "admin")]
 public class UploadController : ControllerBase
 {
     private readonly IExcelImportService _excelImportService;
@@ -23,38 +25,38 @@ public class UploadController : ControllerBase
     }
 
     // --- LEGACY: Single-file upload with ZIP (kept for backward compatibility) ---
-    [HttpPost("bulk-upload")]
-    [IgnoreAntiforgeryToken]
-    public async Task<IActionResult> BulkUpload(IFormFile? zipFile, IFormFile excelFile, CancellationToken ct)
-    {
-        if (excelFile == null || excelFile.Length == 0)
-            return BadRequest(new { error = "Excel file is required." });
+    // [HttpPost("bulk-upload")]
+    // [IgnoreAntiforgeryToken]
+    // public async Task<IActionResult> BulkUpload(IFormFile? zipFile, IFormFile excelFile, CancellationToken ct)
+    // {
+    //     if (excelFile == null || excelFile.Length == 0)
+    //         return BadRequest(new { error = "Excel file is required." });
 
-        if (excelFile.Length > 50 * 1024 * 1024)
-            return BadRequest(new { error = "Excel file must be under 50 MB." });
+    //     if (excelFile.Length > 50 * 1024 * 1024)
+    //         return BadRequest(new { error = "Excel file must be under 50 MB." });
 
-        Dictionary<string, string>? imageMap = null;
+    //     Dictionary<string, string>? imageMap = null;
 
-        if (zipFile != null && zipFile.Length > 0)
-        {
-            var zipStream = zipFile.OpenReadStream();
-            // imageMap = await _imageImportService.ProcessZipAsync(zipStream);
-        }
+    //     if (zipFile != null && zipFile.Length > 0)
+    //     {
+    //         var zipStream = zipFile.OpenReadStream();
+    //         // imageMap = await _imageImportService.ProcessZipAsync(zipStream);
+    //     }
 
-        using var excelStream = excelFile.OpenReadStream();
-        var result = await _excelImportService.ImportAsync(excelStream, imageMap);
+    //     using var excelStream = excelFile.OpenReadStream();
+    //     var result = await _excelImportService.ImportAsync(excelStream, imageMap);
 
-        return Ok(new
-        {
-            message = $"Import complete: {result.SuccessCount} succeeded, {result.DuplicateCount} duplicates skipped, {result.FailedCount} failed.",
-            total = result.TotalRows,
-            success = result.SuccessCount,
-            duplicates = result.DuplicateCount,
-            failed = result.FailedCount,
-            failedRows = result.FailedRows,
-            duplicateRows = result.DuplicateRows
-        });
-    }
+    //     return Ok(new
+    //     {
+    //         message = $"Import complete: {result.SuccessCount} succeeded, {result.DuplicateCount} duplicates skipped, {result.FailedCount} failed.",
+    //         total = result.TotalRows,
+    //         success = result.SuccessCount,
+    //         duplicates = result.DuplicateCount,
+    //         failed = result.FailedCount,
+    //         failedRows = result.FailedRows,
+    //         duplicateRows = result.DuplicateRows
+    //     });
+    // }
 
     // --- NEW: Batch upload from React frontend ---
     [HttpPost("bulk-upload-batch")]
@@ -73,7 +75,7 @@ public class UploadController : ControllerBase
 
         try
         {
-            var createdById = GetCurrentUserId(); // Implement based on your auth
+            var createdById = GetCurrentUserId();
             if (!createdById.HasValue)
                 return Unauthorized(new { error = "Invalid user identity." });
 
@@ -118,7 +120,7 @@ public class UploadController : ControllerBase
          if (files == null || files.Count == 0)
         return BadRequest(new { error = "No files received." });
 
-    var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg" };
+    var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".webp" };
     var urls = new List<string>();
     var fileNames = new List<string>();
 
@@ -133,18 +135,24 @@ public class UploadController : ControllerBase
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!allowedExtensions.Contains(ext))
-            return BadRequest(new { error = $"{file.FileName}: only PNG, JPG, WebP, SVG allowed." });
+            return BadRequest(new { error = $"{file.FileName}: only PNG, JPG, and WebP images are allowed." });
 
         // ---- Option A: keep using your existing service (recommended) ----
         await using var stream = file.OpenReadStream();
-        var url = await _imageImportService.UploadSingleAsync(
-            stream,
-            file.FileName,
-            isQuestionImage ? "questions" : "answers");   // optional folder parameter
+        try
+        {
+            var url = await _imageImportService.UploadSingleAsync(
+                stream,
+                file.FileName,
+                isQuestionImage ? "questions" : "answers");
 
-
-        urls.Add(url);
-        fileNames.Add(file.FileName);
+            urls.Add(url);
+            fileNames.Add(file.FileName);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { error = $"{file.FileName}: {exception.Message}" });
+        }
     }
 
     return Ok(new
@@ -180,9 +188,9 @@ public class UploadController : ControllerBase
     }
 }
 
-public class PresignRequest
-{
-    public string FileName { get; set; } = "";
-    public string ContentType { get; set; } = "";
-    public int? QuestionIndex { get; set; }
-}
+// public class PresignRequest
+// {
+//     public string FileName { get; set; } = "";
+//     public string ContentType { get; set; } = "";
+//     public int? QuestionIndex { get; set; }
+// }

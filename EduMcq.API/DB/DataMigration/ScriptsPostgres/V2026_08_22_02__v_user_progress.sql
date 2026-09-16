@@ -1,6 +1,4 @@
-DROP MATERIALIZED VIEW IF EXISTS mv_user_progress CASCADE;
-
-CREATE MATERIALIZED VIEW mv_user_progress AS
+CREATE OR REPLACE VIEW mv_user_progress AS
 SELECT
     ta.user_id,
 
@@ -14,5 +12,5 @@ SELECT
 FROM test_attempts ta
 GROUP BY ta.user_id;
 
-CREATE UNIQUE INDEX idx_mv_user_progress_user
-    ON mv_user_progress (user_id);
+-- CREATE UNIQUE INDEX idx_mv_user_progress_user
+--     ON mv_user_progress (user_id);

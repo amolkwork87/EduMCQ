@@ -1,6 +1,5 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace EduMcq.Repository;
@@ -10,9 +9,9 @@ public class SubjectRepository : ISubjectRepository
     private const string Columns = "id, exam_id, name, slug, display_order, is_active, created_at";
     private readonly string _connectionString;
 
-    public SubjectRepository(IConfiguration configuration)
+    public SubjectRepository(Infrastructure.AppDb db)
     {
-        _connectionString = configuration["EduMcqDatabaseConnection"] ?? throw new InvalidOperationException("DefaultConnection is not configured.");
+        _connectionString = db.ConnectionString;
     }
 
     public async Task<List<Subject>> GetSubjectsAsync(Guid examId, bool activeOnly = true)

@@ -3,9 +3,11 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace EduMcq.API.Controllers;
+
 [ApiController]
 [Route("api/articles")]
-//[Authorize]
+[Authorize]
 public class ArticlesController : ControllerBase
 {
     private readonly ArticleService _service;

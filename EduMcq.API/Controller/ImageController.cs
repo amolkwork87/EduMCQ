@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace EduMcq.API.Controllers;
+
 [ApiController]
 [Route("api/admin/images")]
-//[Authorize(Roles = "admin")]          // or [Authorize] + policy
+[Authorize(Roles = "admin")]          // or [Authorize] + policy
 public class ImageController : ControllerBase
 {
     private readonly IWebHostEnvironment _env;
@@ -16,8 +18,14 @@ public class ImageController : ControllerBase
     [HttpGet("{folder}/{fileName}")]
     public IActionResult GetImage(string folder, string fileName)
     {
-        // Optional extra safety
         if (folder is not ("questions" or "q" or "a" or "answers"))
+            return BadRequest();
+
+        if (Path.GetFileName(fileName) != fileName)
+            return BadRequest();
+
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        if (extension is not (".png" or ".jpg" or ".jpeg" or ".webp"))
             return BadRequest();
 
         var path = Path.Combine(_env.WebRootPath, "images", folder, fileName);
@@ -25,8 +33,8 @@ public class ImageController : ControllerBase
         if (!System.IO.File.Exists(path))
             return NotFound();
 
-        var contentType = GetContentType(Path.GetExtension(fileName));
-        return PhysicalFile(path, contentType);
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return PhysicalFile(path, GetContentType(extension));
     }
 
     private static string GetContentType(string ext) => ext.ToLower() switch
@@ -34,7 +42,6 @@ public class ImageController : ControllerBase
         ".png"  => "image/png",
         ".jpg" or ".jpeg" => "image/jpeg",
         ".webp" => "image/webp",
-        ".svg"  => "image/svg+xml",
         _       => "application/octet-stream"
     };
 }

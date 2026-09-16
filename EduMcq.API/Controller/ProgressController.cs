@@ -3,9 +3,11 @@ using EduMcq.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace EduMcq.API.Controllers;
+
 [ApiController]
 [Route("api/user/progress")]
-//[Authorize]
+[Authorize]
 public class ProgressController : ControllerBase
 {
     private readonly ProgressService _progressService;

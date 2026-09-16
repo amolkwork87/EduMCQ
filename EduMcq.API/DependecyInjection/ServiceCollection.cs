@@ -10,98 +10,99 @@ using Npgsql;
 public static class ServiceCollection
 {
 
-//     public static void AddSwaggerConfiguration(this IServiceCollection services)
-//     {
-//         services.AddSwaggerGen(c =>
-// {
-//     c.SwaggerDoc("v1", new OpenApiInfo { Title = "EduMCQ API", Version = "v1" });
+    //     public static void AddSwaggerConfiguration(this IServiceCollection services)
+    //     {
+    //         services.AddSwaggerGen(c =>
+    // {
+    //     c.SwaggerDoc("v1", new OpenApiInfo { Title = "EduMCQ API", Version = "v1" });
 
-//     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-//     {
-//         Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
-//         Name = "Authorization",
-//         In = ParameterLocation.Header,
-//         Type = SecuritySchemeType.ApiKey,
-//         Scheme = "Bearer"
-//     });
+    //     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    //     {
+    //         Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+    //         Name = "Authorization",
+    //         In = ParameterLocation.Header,
+    //         Type = SecuritySchemeType.ApiKey,
+    //         Scheme = "Bearer"
+    //     });
 
-//     c.AddSecurityRequirement(new OpenApiSecurityRequirement
-//     {
-//         {
-//             new OpenApiSecurityScheme
-//             {
-//                 Reference = new OpenApiReference
-//                 {
-//                     Type = ReferenceType.SecurityScheme,
-//                     Id = "Bearer"
-//                 }
-//             },
-//             Array.Empty<string>()
-//         }
-//     });
-// });
+    //     c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    //     {
+    //         {
+    //             new OpenApiSecurityScheme
+    //             {
+    //                 Reference = new OpenApiReference
+    //                 {
+    //                     Type = ReferenceType.SecurityScheme,
+    //                     Id = "Bearer"
+    //                 }
+    //             },
+    //             Array.Empty<string>()
+    //         }
+    //     });
+    // });
 
-//     }
+    //     }
     public static void ApplyDbMigrations(
     this IApplicationBuilder app,
     string connectionString)
-{
-    using var scope = app.ApplicationServices.CreateScope();
-
-    var logger = scope.ServiceProvider
-        .GetRequiredService<ILoggerFactory>()
-        .CreateLogger("DBMigration");
-
-    if (string.IsNullOrWhiteSpace(connectionString))
     {
-        throw new InvalidOperationException(
-            "EduMcqDatabaseConnection is missing or empty.");
-    }
+        using var scope = app.ApplicationServices.CreateScope();
 
-    logger.LogInformation(
-        "Database connection string received. Length: {Length}",
-        connectionString.Length);
+        var logger = scope.ServiceProvider
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("DBMigration");
 
-    try
-    {
-        using var connection = new NpgsqlConnection(connectionString);
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "EduMcqDatabaseConnection is missing or empty.");
+        }
 
         logger.LogInformation(
-            "Npgsql connection created. Host: {Host}, Database: {Database}",
-            connection.Host,
-            connection.Database);
+            "Database connection string received. Length: {Length}",
+            connectionString.Length);
 
-        connection.Open();
-
-        logger.LogInformation("PostgreSQL connection opened successfully.");
-
-        var evolve = new Evolve(
-            connection,
-            msg => logger.LogInformation(msg))
+        try
         {
-            Locations = new[] { "DB/DataMigration" },
-            IsEraseDisabled = true,
-            MetadataTableName = "edumcq_changelog",
-            OutOfOrder = true
-        };
+            using var connection = new NpgsqlConnection(connectionString);
 
-        evolve.Migrate();
+            logger.LogInformation(
+                "Npgsql connection created. Host: {Host}, Database: {Database}",
+                connection.Host,
+                connection.Database);
 
-        logger.LogInformation("Database migrations completed successfully.");
+            connection.Open();
+
+            logger.LogInformation("PostgreSQL connection opened successfully.");
+
+            var evolve = new Evolve(
+                connection,
+                msg => logger.LogInformation(msg))
+            {
+                Locations = new[] { "DB/DataMigration" },
+                IsEraseDisabled = true,
+                MetadataTableName = "edumcq_changelog",
+                OutOfOrder = true
+            };
+
+            evolve.Migrate();
+
+            logger.LogInformation("Database migrations completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Database migration failed. Exception: {ExceptionType}",
+                ex.GetType().FullName);
+
+            throw;
+        }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(
-            ex,
-            "Database migration failed. Exception: {ExceptionType}",
-            ex.GetType().FullName);
-
-        throw;
-    }
-}
 
     public static void AddRepositories(this IServiceCollection services)
     {
+        services.AddScoped<EduMcq.Infrastructure.AppDb>();
         services.AddScoped<IExamRepository, ExamRepository>();
         services.AddScoped<IConceptRepository, ConceptRepository>();
         services.AddScoped<ITopicRepository, TopicRepository>();
@@ -114,6 +115,8 @@ public static class ServiceCollection
         services.AddScoped<IArticleRepository, ArticleRepository>();
         services.AddScoped<IProgressRepository, ProgressRepository>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+        services.AddScoped<ITestRepository, TestRepository>();
+        services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
     }
 
     public static void AddServices(this IServiceCollection services)
@@ -130,9 +133,11 @@ public static class ServiceCollection
         services.AddScoped<JwtService>();
         services.AddScoped<SocialLoginService>();
         services.AddScoped<UserService>();
-         services.AddScoped<ProgressService>();
-         services.AddScoped<SubscriptionService>();
-         services.AddScoped<ArticleService>();
+        services.AddScoped<ProgressService>();
+        services.AddScoped<SubscriptionService>();
+        services.AddScoped<ArticleService>();
+        services.AddScoped<ITestService, TestService>();
+        services.AddScoped<ILeaderboardService, LeaderboardService>();
 
     }
 

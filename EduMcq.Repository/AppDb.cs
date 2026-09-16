@@ -1,5 +1,6 @@
 using Npgsql;
 using System.Data;
+using Microsoft.Extensions.Configuration;
 
 namespace EduMcq.Infrastructure;
 
@@ -9,9 +10,25 @@ public class AppDb : IDisposable
     private NpgsqlConnection? _conn;
     private bool _isDisposed;
 
+    public AppDb(IConfiguration configuration)
+        : this(configuration["EduMcqDatabaseConnection"]
+            ?? throw new InvalidOperationException("EduMcqDatabaseConnection is not configured."))
+    {
+        
+    }
+
     public AppDb(string connectionString)
     {
         _connectionString = connectionString;
+    }
+
+    public string ConnectionString => _connectionString;
+
+    public async Task<NpgsqlConnection> CreateConnectionAsync()
+    {
+        var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync();
+        return connection;
     }
 
     public async Task<NpgsqlConnection> GetConnectionAsync()

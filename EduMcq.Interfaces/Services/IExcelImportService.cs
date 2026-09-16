@@ -7,10 +7,10 @@ public interface IExcelImportService
     /// <summary>
     /// Legacy single-file import (ZIP + Excel)
     /// </summary>
-    Task<BulkUploadResult> ImportAsync(
-        Stream excelStream,
-        Dictionary<string, string>? imageMap = null,
-        Guid? createdById = null);
+    // Task<BulkUploadResult> ImportAsync(
+    //     Stream excelStream,
+    //     Dictionary<string, string>? imageMap = null,
+    //     Guid? createdById = null);
 
     /// <summary>
     /// Batch import from React frontend (500 rows max per batch)

@@ -3,7 +3,7 @@ using EduMcq.Models;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 
-namespace EduMcq.Controllers;
+namespace EduMcq.API.Controllers;
 
 [ApiController]
 [Route("api/admin")]

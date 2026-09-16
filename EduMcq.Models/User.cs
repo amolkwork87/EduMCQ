@@ -27,5 +27,29 @@ public class User
     public string Status {get;set;}
 }
 
+public class UserProfileDto
+{
+    public Guid Id { get; set; }
+    public string? Name { get; set; }
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public string? SchoolName { get; set; }
+    public string? ClassStandard { get; set; }
+    public Guid? TargetExamId { get; set; }
+    public string? AvatarUrl { get; set; }
+    public string PreferredLanguage { get; set; } = "en";
+    public object? Preferences { get; set; }   // JSON
+}
+
+public class UpdateProfileDto
+{
+    public string? Name { get; set; }
+    public string? Phone { get; set; }
+    public string? SchoolName { get; set; }
+    public string? ClassStandard { get; set; }
+    public Guid? TargetExamId { get; set; }
+    public object? Preferences { get; set; }
+}
+
 
 
