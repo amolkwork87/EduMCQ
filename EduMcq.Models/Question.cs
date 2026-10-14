@@ -21,8 +21,8 @@ public class QuestionResultDto
         public string QuestionText { get; set; } = "";
         public string? Topic { get; set; }
         public string? Concept { get; set; }
-        public int Difficulty { get; set; }
-        public string?[] Options { get; set; } = Array.Empty<string?>();
+        public string Difficulty { get; set; }
+        public List<String> Options { get; set; }
         public int CorrectOption { get; set; }
         public int? SelectedOption { get; set; }
         public string? Explanation { get; set; }

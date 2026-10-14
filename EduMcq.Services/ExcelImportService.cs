@@ -90,7 +90,7 @@ public class ExcelImportService : IExcelImportService
         {
             topicId = db.GetTopicId(subjectId, row.Topic, row.Subtopic);
             if (!topicId.HasValue) throw new InvalidOperationException($"Topic not found: '{row.Topic}'");
-            if (!string.IsNullOrWhiteSpace(row.Concept)) conceptId = db.GetConceptId(topicId.Value, row.Concept) ?? throw new InvalidOperationException($"Concept not found: '{row.Concept}'");
+            //if (!string.IsNullOrWhiteSpace(row.Concept)) conceptId = db.GetConceptId(topicId.Value, row.Concept) ?? throw new InvalidOperationException($"Concept not found: '{row.Concept}'");
         }
         else if (!string.IsNullOrWhiteSpace(row.Concept)) throw new InvalidOperationException("Concept provided but Topic is missing");
         var prepared = new PreparedQuestion(row, Guid.NewGuid(), hash, examId, standardId, subjectId, topicId, conceptId);

@@ -117,6 +117,7 @@ public static class ServiceCollection
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
         services.AddScoped<ITestRepository, TestRepository>();
         services.AddScoped<ILeaderboardRepository, LeaderboardRepository>();
+        services.AddScoped<MockTestRepository>();
     }
 
     public static void AddServices(this IServiceCollection services)
@@ -138,6 +139,7 @@ public static class ServiceCollection
         services.AddScoped<ArticleService>();
         services.AddScoped<ITestService, TestService>();
         services.AddScoped<ILeaderboardService, LeaderboardService>();
+        
 
     }
 

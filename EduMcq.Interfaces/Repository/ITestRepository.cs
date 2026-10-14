@@ -10,4 +10,7 @@ public interface ITestRepository
     Task<List<QuestionDto>> GetQuestionsAsync(Guid subjectId, Guid standardId, int limit);
     Task<QuestionDto?> GetQuestionByIdAsync(Guid id);
     Task SaveTestAttemptAsync(TestSubmissionDto submission, TestResultDto result);
+    Task<TestResultDto> SubmitAndScoreAsync(Guid templateId, SubmissionRequest req);
+    Task<TestPayloadDto?> GetTemplateQuestionsAsync(Guid templateId);
+    Task<List<AvailableTestDto>> GetAvailableTemplatesAsync(Guid? examId, Guid? standardId, Guid? subjectId);
 }

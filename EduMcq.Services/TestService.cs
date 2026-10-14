@@ -1,5 +1,6 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
+using Npgsql;
 
 namespace EduMcq.Services;
 
@@ -50,8 +51,8 @@ public class TestService : ITestService
                 QuestionText = question.QuestionText,
                 Topic = question.Topic,
                 Concept = question.Concept,
-                Difficulty = question.Difficulty,
-                Options = new[] { question.OptionA, question.OptionB, question.OptionC, question.OptionD },
+                Difficulty = question.Difficulty.ToString(),
+                Options = new List<string> { question.OptionA, question.OptionB, question.OptionC, question.OptionD },
                 CorrectOption = question.CorrectOption,
                 SelectedOption = answer.SelectedOption,
                 Explanation = question.Explanation,
@@ -76,4 +77,22 @@ public class TestService : ITestService
         await _repository.SaveTestAttemptAsync(submission, result);
         return result;
     }
+
+// ------------------ 3. Score submission ------------------
+    public async Task<TestResultDto> SubmitAndScoreAsync(Guid templateId, SubmissionRequest req)
+    {
+      return await _repository.SubmitAndScoreAsync(templateId, req);
+    }
+
+     public async Task<TestPayloadDto?> GetTemplateQuestionsAsync(Guid templateId)
+    {
+        return await _repository.GetTemplateQuestionsAsync(templateId);
+    }
+
+    public async Task<List<AvailableTestDto>> GetAvailableTemplatesAsync(
+        Guid? examId, Guid? standardId, Guid? subjectId)
+    {
+        return await _repository.GetAvailableTemplatesAsync(examId, standardId, subjectId);
+    }
+
 }
