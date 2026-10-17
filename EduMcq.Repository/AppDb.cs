@@ -1,4 +1,4 @@
-using Npgsql;
+using MySqlConnector;
 using System.Data;
 using Microsoft.Extensions.Configuration;
 
@@ -7,7 +7,7 @@ namespace EduMcq.Infrastructure;
 public class AppDb : IDisposable
 {
     private readonly string _connectionString;
-    private NpgsqlConnection? _conn;
+    private MySqlConnection? _conn;
     private bool _isDisposed;
 
     public AppDb(IConfiguration configuration)
@@ -24,39 +24,39 @@ public class AppDb : IDisposable
 
     public string ConnectionString => _connectionString;
 
-    public async Task<NpgsqlConnection> CreateConnectionAsync()
+    public async Task<MySqlConnection> CreateConnectionAsync()
     {
-        var connection = new NpgsqlConnection(_connectionString);
+        var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
         return connection;
     }
 
-    public async Task<NpgsqlConnection> GetConnectionAsync()
+    public async Task<MySqlConnection> GetConnectionAsync()
     {
         if (_conn == null || _conn.State != ConnectionState.Open)
         {
-            _conn = new NpgsqlConnection(_connectionString);
+            _conn = new MySqlConnection(_connectionString);
             await _conn.OpenAsync();
         }
         return _conn;
     }
 
-    public NpgsqlConnection? Connection => _conn;
+    public MySqlConnection? Connection => _conn;
 
-    public async Task<NpgsqlCommand> CreateCommandAsync(string sql, NpgsqlTransaction? tx = null)
+    public async Task<MySqlCommand> CreateCommandAsync(string sql, MySqlTransaction? tx = null)
     {
         var conn = await GetConnectionAsync();
-        var cmd = new NpgsqlCommand(sql, conn, tx);
+        var cmd = new MySqlCommand(sql, conn, tx);
         cmd.CommandTimeout = 300; // 5 min for bulk ops
         return cmd;
     }
 
-    public NpgsqlCommand CreateCommand(string sql, NpgsqlTransaction? tx = null)
+    public MySqlCommand CreateCommand(string sql, MySqlTransaction? tx = null)
     {
         if (_conn == null || _conn.State != ConnectionState.Open)
             throw new InvalidOperationException("Connection not open. Use CreateCommandAsync instead.");
 
-        var cmd = new NpgsqlCommand(sql, _conn, tx);
+        var cmd = new MySqlCommand(sql, _conn, tx);
         cmd.CommandTimeout = 300;
         return cmd;
     }
@@ -71,13 +71,13 @@ public class AppDb : IDisposable
     private Dictionary<string, Guid>? _skillCache;
     private HashSet<string>? _hashCache;
 
-    public async Task PreloadCachesAsync(NpgsqlTransaction tx)
+    public async Task PreloadCachesAsync(MySqlTransaction tx)
     {
         var conn = await GetConnectionAsync();
 
         // Preload all exams
         _examCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT id, name FROM exams", conn, tx))
+        using (var cmd = new MySqlCommand("SELECT id, name FROM exams", conn, tx))
         using (var reader = await cmd.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
@@ -86,7 +86,7 @@ public class AppDb : IDisposable
 
         // Preload all standards
         _standardCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT id, exam_id, name FROM standards", conn, tx))
+        using (var cmd = new MySqlCommand("SELECT id, exam_id, name FROM standards", conn, tx))
         using (var reader = await cmd.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
@@ -95,7 +95,7 @@ public class AppDb : IDisposable
 
         // Preload all subjects
         _subjectCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT id, exam_id, name FROM subjects", conn, tx))
+        using (var cmd = new MySqlCommand("SELECT id, exam_id, name FROM subjects", conn, tx))
         using (var reader = await cmd.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
@@ -104,7 +104,7 @@ public class AppDb : IDisposable
 
         // Preload all topics
         _topicCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT t.id, t.subject_id, t.name, p.name as parent_name FROM topics t LEFT JOIN topics p ON t.parent_id = p.id WHERE t.is_active = true", conn, tx))
+        using (var cmd = new MySqlCommand("SELECT t.id, t.subject_id, t.name, p.name as parent_name FROM topics t LEFT JOIN topics p ON t.parent_id = p.id WHERE t.is_active = true", conn, tx))
         using (var reader = await cmd.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
@@ -118,7 +118,7 @@ public class AppDb : IDisposable
 
         // Preload all concepts
         _conceptCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT id, topic_id, name FROM concepts WHERE is_active = true", conn, tx))
+        using (var cmd = new MySqlCommand("SELECT id, topic_id, name FROM concepts WHERE is_active = true", conn, tx))
         using (var conceptReader = await cmd.ExecuteReaderAsync())
         {
             while (await conceptReader.ReadAsync())
@@ -135,7 +135,7 @@ public class AppDb : IDisposable
 
         // Preload all thinking skills
         _skillCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT id, LOWER(name) as name FROM thinking_skills", conn, tx))
+        using (var cmd = new MySqlCommand("SELECT id, LOWER(name) as name FROM thinking_skills", conn, tx))
         using (var reader = await cmd.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
@@ -144,7 +144,7 @@ public class AppDb : IDisposable
 
         // Preload all existing hashes for duplicate check
         _hashCache = new();
-        using (var cmd = new NpgsqlCommand("SELECT content_hash FROM questions", conn, tx))
+        using (var cmd = new MySqlCommand("SELECT content_hash FROM questions", conn, tx))
         using (var reader = await cmd.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
@@ -233,43 +233,43 @@ public class AppDb : IDisposable
 
     // --- Legacy async methods (for backward compatibility) ---
 
-    public async Task<Guid?> GetExamIdAsync(NpgsqlTransaction tx, string name)
+    public async Task<Guid?> GetExamIdAsync(MySqlTransaction tx, string name)
     {
         if (_examCache != null) return GetExamId(name);
 
-        using var cmd = new NpgsqlCommand("SELECT id FROM exams WHERE name = @name", await GetConnectionAsync(), tx);
+        using var cmd = new MySqlCommand("SELECT id FROM exams WHERE name = @name", await GetConnectionAsync(), tx);
         cmd.Parameters.AddWithValue("name", name);
         var result = await cmd.ExecuteScalarAsync();
         return result == null ? null : (Guid?)result;
     }
 
-    public async Task<Guid?> GetStandardIdAsync(NpgsqlTransaction tx, Guid examId, string name)
+    public async Task<Guid?> GetStandardIdAsync(MySqlTransaction tx, Guid examId, string name)
     {
         if (_standardCache != null) return GetStandardId(examId, name);
 
-        using var cmd = new NpgsqlCommand("SELECT id FROM standards WHERE exam_id = @eid AND name = @name", await GetConnectionAsync(), tx);
+        using var cmd = new MySqlCommand("SELECT id FROM standards WHERE exam_id = @eid AND name = @name", await GetConnectionAsync(), tx);
         cmd.Parameters.AddWithValue("eid", examId);
         cmd.Parameters.AddWithValue("name", name);
         var result = await cmd.ExecuteScalarAsync();
         return result == null ? null : (Guid?)result;
     }
 
-    public async Task<Guid?> GetSubjectIdAsync(NpgsqlTransaction tx, Guid examId, string name)
+    public async Task<Guid?> GetSubjectIdAsync(MySqlTransaction tx, Guid examId, string name)
     {
         if (_subjectCache != null) return GetSubjectId(examId, name);
 
-        using var cmd = new NpgsqlCommand("SELECT id FROM subjects WHERE exam_id = @eid AND name = @name", await GetConnectionAsync(), tx);
+        using var cmd = new MySqlCommand("SELECT id FROM subjects WHERE exam_id = @eid AND name = @name", await GetConnectionAsync(), tx);
         cmd.Parameters.AddWithValue("eid", examId);
         cmd.Parameters.AddWithValue("name", name);
         var result = await cmd.ExecuteScalarAsync();
         return result == null ? null : (Guid?)result;
     }
 
-    public async Task<Guid?> FindDuplicateAsync(NpgsqlTransaction tx, string contentHash)
+    public async Task<Guid?> FindDuplicateAsync(MySqlTransaction tx, string contentHash)
     {
         if (_hashCache != null) return IsDuplicateHash(contentHash) ? Guid.NewGuid() : null; // Return dummy for compatibility
 
-        using var cmd = new NpgsqlCommand("SELECT id FROM questions WHERE content_hash = @hash", await GetConnectionAsync(), tx);
+        using var cmd = new MySqlCommand("SELECT id FROM questions WHERE content_hash = @hash", await GetConnectionAsync(), tx);
         cmd.Parameters.AddWithValue("hash", contentHash);
         var result = await cmd.ExecuteScalarAsync();
         return result == null ? null : (Guid?)result;

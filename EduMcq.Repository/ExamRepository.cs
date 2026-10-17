@@ -1,6 +1,6 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Npgsql;
+using MySqlConnector;
 
 namespace EduMcq.Repository;
 
@@ -17,12 +17,12 @@ public class ExamRepository : IExamRepository
     public async Task<List<Exam>> GetExamsAsync(bool activeOnly = true)
     {
         var exams = new List<Exam>();
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
         var sql = $"SELECT {ExamColumns} FROM exams" +
                   (activeOnly ? " WHERE is_active = true" : "") +
                   " ORDER BY display_order, name";
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             exams.Add(MapExam(reader));
@@ -31,9 +31,9 @@ public class ExamRepository : IExamRepository
 
     public async Task<Exam?> GetExamByIdAsync(Guid id)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand($"SELECT {ExamColumns} FROM exams WHERE id = @id", connection);
+        await using var command = new MySqlCommand($"SELECT {ExamColumns} FROM exams WHERE id = @id", connection);
         command.Parameters.AddWithValue("id", id);
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync() ? MapExam(reader) : null;
@@ -41,20 +41,24 @@ public class ExamRepository : IExamRepository
 
     public async Task<Exam> CreateExam(CreateExamRequest req)
     {
+        var id = Guid.NewGuid();
         var slug = string.IsNullOrWhiteSpace(req.Slug) ? GenerateSlug(req.Name) : req.Slug;
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand($@"
-            INSERT INTO exams (name, slug, description, logo_url, is_active, display_order)
-            VALUES (@name, @slug, @description, @logo, @active, @display_order)
-            RETURNING {ExamColumns}", connection);
+        await using var command = new MySqlCommand($@"
+            INSERT INTO exams (id, name, slug, description, logo_url, is_active, display_order)
+            VALUES (@id, @name, @slug, @description, @logo, @active, @display_order)", connection);
+        command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("name", req.Name.Trim());
         command.Parameters.AddWithValue("slug", slug);
         command.Parameters.AddWithValue("description", (object?)req.Description ?? DBNull.Value);
         command.Parameters.AddWithValue("logo", (object?)req.LogoUrl ?? DBNull.Value);
         command.Parameters.AddWithValue("active", req.IsActive ?? true);
         command.Parameters.AddWithValue("display_order", (object?)req.DisplayOrder ?? DBNull.Value);
-        await using var reader = await command.ExecuteReaderAsync();
+        await command.ExecuteNonQueryAsync();
+        await using var select = new MySqlCommand($"SELECT {ExamColumns} FROM exams WHERE id = @id", connection);
+        select.Parameters.AddWithValue("id", id);
+        await using var reader = await select.ExecuteReaderAsync();
         await reader.ReadAsync();
         return MapExam(reader);
     }
@@ -62,9 +66,9 @@ public class ExamRepository : IExamRepository
     public async Task<Exam?> UpdateExam(Guid id, UpdateExamRequest req)
     {
         var updates = new List<string>();
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand { Connection = connection };
+        await using var command = new MySqlCommand { Connection = connection };
         if (req.Name != null) { updates.Add("name = @name"); command.Parameters.AddWithValue("name", req.Name.Trim()); }
         if (req.Slug != null) { updates.Add("slug = @slug"); command.Parameters.AddWithValue("slug", req.Slug); }
         if (req.Description != null) { updates.Add("description = @description"); command.Parameters.AddWithValue("description", req.Description); }
@@ -73,17 +77,20 @@ public class ExamRepository : IExamRepository
         if (req.DisplayOrder.HasValue) { updates.Add("display_order = @display_order"); command.Parameters.AddWithValue("display_order", req.DisplayOrder.Value); }
         if (updates.Count == 0)
             return null;
-        command.CommandText = $"UPDATE exams SET {string.Join(", ", updates)} WHERE id = @id RETURNING {ExamColumns}";
+        command.CommandText = $"UPDATE exams SET {string.Join(", ", updates)} WHERE id = @id";
         command.Parameters.AddWithValue("id", id);
-        await using var reader = await command.ExecuteReaderAsync();
+        await command.ExecuteNonQueryAsync();
+        await using var select = new MySqlCommand($"SELECT {ExamColumns} FROM exams WHERE id = @id", connection);
+        select.Parameters.AddWithValue("id", id);
+        await using var reader = await select.ExecuteReaderAsync();
         return await reader.ReadAsync() ? MapExam(reader) : null;
     }
 
     public async Task<bool> DeleteExam(Guid id)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand("DELETE FROM exams WHERE id = @id", connection);
+        await using var command = new MySqlCommand("DELETE FROM exams WHERE id = @id", connection);
         command.Parameters.AddWithValue("id", id);
         return await command.ExecuteNonQueryAsync() > 0;
     }
@@ -93,7 +100,7 @@ public class ExamRepository : IExamRepository
         .Replace(".", "").Replace("(", "").Replace(")", "")
         .Replace("'", "").Replace("--", "-");
 
-    private static Exam MapExam(NpgsqlDataReader reader) => new()
+    private static Exam MapExam(MySqlDataReader reader) => new()
     {
         Id = reader.GetGuid(0),
         Name = reader.GetString(1),

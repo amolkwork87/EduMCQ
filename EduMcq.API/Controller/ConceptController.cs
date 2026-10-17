@@ -1,7 +1,7 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
 using Microsoft.AspNetCore.Mvc;
-using Npgsql;
+using MySqlConnector;
 
 namespace EduMcq.API.Controllers;
 
@@ -20,7 +20,7 @@ public class ConceptController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { error = "Name is required" });
         try { return CreatedAtAction(nameof(GetConcepts), new { topicId }, await _conceptService.CreateConcept(topicId, req)); }
-        catch (PostgresException ex) when (ex.SqlState == "23505") { return Conflict(new { error = $"Concept '{req.Name}' already exists for this topic" }); }
+        catch (MySqlException ex) when (ex.Number == 1062) { return Conflict(new { error = $"Concept '{req.Name}' already exists for this topic" }); }
     }
 
     [HttpPut("concepts/{id:guid}")]

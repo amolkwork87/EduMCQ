@@ -2,8 +2,7 @@ using System.Net;
 using System.Text.Json;
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Npgsql;
-using NpgsqlTypes;
+using MySqlConnector;
 
 namespace EduMcq.Repository;
 
@@ -19,7 +18,7 @@ public class UserRepository : IUserRepository
     public async Task<User?> GetActiveUserByEmailAsync(string email)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand("SELECT id, phone, email, name, role, avatar_url FROM users WHERE email = @email AND is_active = true", connection);
+        await using var command = new MySqlCommand("SELECT id, phone, email, name, role, avatar_url FROM users WHERE email = @email AND is_active = true", connection);
         command.Parameters.AddWithValue("email", email);
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync() ? MapUser(reader) : null;
@@ -28,7 +27,7 @@ public class UserRepository : IUserRepository
     public async Task<Guid?> GetActiveUserIdByEmailAsync(string email)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand("SELECT id FROM users WHERE email = @email AND is_active = true", connection);
+        await using var command = new MySqlCommand("SELECT id FROM users WHERE email = @email AND is_active = true", connection);
         command.Parameters.AddWithValue("email", email);
         var result = await command.ExecuteScalarAsync();
         return result is Guid id ? id : null;
@@ -37,7 +36,7 @@ public class UserRepository : IUserRepository
     public async Task CreatePasswordResetAsync(Guid userId, string email, string token, DateTime expiresAt)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(@"INSERT INTO otp_verifications (user_id, email, otp_code, purpose, expires_at, is_used, attempts)
+        await using var command = new MySqlCommand(@"INSERT INTO otp_verifications (user_id, email, otp_code, purpose, expires_at, is_used, attempts)
             VALUES (@userId, @email, @token, 'password_reset', @expiresAt, false, 0)", connection);
         command.Parameters.AddWithValue("userId", userId);
         command.Parameters.AddWithValue("email", email);
@@ -49,7 +48,7 @@ public class UserRepository : IUserRepository
     public async Task<(Guid OtpId, Guid UserId)?> GetValidPasswordResetAsync(string token)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(@"SELECT id, user_id FROM otp_verifications
+        await using var command = new MySqlCommand(@"SELECT id, user_id FROM otp_verifications
             WHERE otp_code = @token AND purpose = 'password_reset' AND is_used = false AND expires_at > NOW()", connection);
         command.Parameters.AddWithValue("token", token);
         await using var reader = await command.ExecuteReaderAsync();
@@ -62,12 +61,12 @@ public class UserRepository : IUserRepository
         await using var transaction = await connection.BeginTransactionAsync();
         try
         {
-            await using var updateUser = new NpgsqlCommand("UPDATE users SET password_hash = @hash, updated_at = NOW() WHERE id = @userId", connection, transaction);
+            await using var updateUser = new MySqlCommand("UPDATE users SET password_hash = @hash, updated_at = NOW() WHERE id = @userId", connection, transaction);
             updateUser.Parameters.AddWithValue("hash", passwordHash);
             updateUser.Parameters.AddWithValue("userId", userId);
             var updated = await updateUser.ExecuteNonQueryAsync();
 
-            await using var updateOtp = new NpgsqlCommand("UPDATE otp_verifications SET is_used = true WHERE id = @otpId", connection, transaction);
+            await using var updateOtp = new MySqlCommand("UPDATE otp_verifications SET is_used = true WHERE id = @otpId", connection, transaction);
             updateOtp.Parameters.AddWithValue("otpId", otpId);
             await updateOtp.ExecuteNonQueryAsync();
             await transaction.CommitAsync();
@@ -86,9 +85,9 @@ public class UserRepository : IUserRepository
     public async Task<bool> IsPhoneRecentlyVerifiedAsync(string phone, string purpose)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(@"SELECT 1 FROM otp_verifications
+        await using var command = new MySqlCommand(@"SELECT 1 FROM otp_verifications
             WHERE phone = @phone AND purpose = @purpose AND is_used = true
-            AND expires_at > NOW() - INTERVAL '15 minutes' LIMIT 1", connection);
+            AND expires_at > NOW() - INTERVAL 15 MINUTE LIMIT 1", connection);
         command.Parameters.AddWithValue("phone", phone);
         command.Parameters.AddWithValue("purpose", purpose);
         return await command.ExecuteScalarAsync() != null;
@@ -100,7 +99,7 @@ public class UserRepository : IUserRepository
         var name = $"{request.FirstName} {request.LastName}".Trim();
         var role = request.Role.ToLowerInvariant();
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(@"INSERT INTO users
+        await using var command = new MySqlCommand(@"INSERT INTO users
             (id, email, phone, name, role, class_standard, school_name, is_phone_verified,
              is_email_verified, is_active, password_hash, created_at, updated_at)
             VALUES (@id, @email, @phone, @name, @role, @classStandard, @schoolName,
@@ -121,7 +120,7 @@ public class UserRepository : IUserRepository
     public async Task<SubscriptionDto?> GetActiveSubscriptionAsync(Guid userId)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(@"SELECT id, user_id, plan, status, amount_paise, currency, started_at, expires_at, auto_renew
+        await using var command = new MySqlCommand(@"SELECT id, user_id, plan, status, amount_paise, currency, started_at, expires_at, auto_renew
             FROM subscriptions WHERE user_id = @userId AND status = 'active' AND expires_at > NOW()
             ORDER BY expires_at DESC LIMIT 1", connection);
         command.Parameters.AddWithValue("userId", userId);
@@ -145,9 +144,9 @@ public class UserRepository : IUserRepository
     {
         var id = Guid.NewGuid();
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(@"INSERT INTO subscriptions
+        await using var command = new MySqlCommand(@"INSERT INTO subscriptions
             (id, user_id, plan, status, amount_paise, currency, started_at, expires_at, auto_renew)
-            VALUES (@id, @userId, @plan, 'pending', @amount, 'INR', NOW(), NOW() + INTERVAL '30 days', true)", connection);
+            VALUES (@id, @userId, @plan, 'pending', @amount, 'INR', NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), true)", connection);
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("userId", userId);
         command.Parameters.AddWithValue("plan", plan);
@@ -159,9 +158,9 @@ public class UserRepository : IUserRepository
     public async Task HandleRazorpayWebhookAsync(string eventType, string razorpaySubscriptionId, string status)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(@"UPDATE subscriptions
+        await using var command = new MySqlCommand(@"UPDATE subscriptions
             SET status = @status, razorpay_subscription_id = @razorpayId, updated_at = NOW()
-            WHERE razorpay_subscription_id = @razorpayId OR id = @razorpayId::uuid", connection);
+            WHERE razorpay_subscription_id = @razorpayId OR id = @razorpayId", connection);
         command.Parameters.AddWithValue("status", status);
         command.Parameters.AddWithValue("razorpayId", razorpaySubscriptionId);
         await command.ExecuteNonQueryAsync();
@@ -188,7 +187,7 @@ public class UserRepository : IUserRepository
                 user = await FindUserAsync(connection, transaction, "email = @email", "email", socialUser.Email);
                 if (user != null)
                 {
-                    await using var link = new NpgsqlCommand($"UPDATE users SET {column} = @providerId, updated_at = NOW() WHERE id = @userId AND {column} IS NULL", connection, transaction);
+                    await using var link = new MySqlCommand($"UPDATE users SET {column} = @providerId, updated_at = NOW() WHERE id = @userId AND {column} IS NULL", connection, transaction);
                     link.Parameters.AddWithValue("providerId", socialUser.ProviderId);
                     link.Parameters.AddWithValue("userId", user.UserId);
                     await link.ExecuteNonQueryAsync();
@@ -197,7 +196,7 @@ public class UserRepository : IUserRepository
                 }
             }
             var userId = Guid.NewGuid();
-            await using var insert = new NpgsqlCommand($@"INSERT INTO users
+            await using var insert = new MySqlCommand($@"INSERT INTO users
                 (id, email, name, {column}, avatar_url, is_email_verified, role, created_at, updated_at)
                 VALUES (@id, @email, @name, @providerId, @avatar, @emailVerified, 'student', NOW(), NOW())", connection, transaction);
             insert.Parameters.AddWithValue("id", userId);
@@ -207,7 +206,7 @@ public class UserRepository : IUserRepository
             insert.Parameters.AddWithValue("avatar", (object?)socialUser.Picture ?? DBNull.Value);
             insert.Parameters.AddWithValue("emailVerified", socialUser.EmailVerified);
             await insert.ExecuteNonQueryAsync();
-            await using var socialInsert = new NpgsqlCommand(@"INSERT INTO social_logins
+            await using var socialInsert = new MySqlCommand(@"INSERT INTO social_logins
                 (user_id, provider, provider_id, provider_email) VALUES (@userId, @provider, @providerId, @email)", connection, transaction);
             socialInsert.Parameters.AddWithValue("userId", userId);
             socialInsert.Parameters.AddWithValue("provider", normalizedProvider);
@@ -227,13 +226,13 @@ public class UserRepository : IUserRepository
     public async Task SaveRefreshTokenAsync(Guid userId, string token, DateTime expiresAt, string? createdByIp)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand("INSERT INTO refresh_tokens (user_id, token_hash, expires_at, ip_address) VALUES (@userId, @token, @expiresAt, @ip)", connection);
+        await using var command = new MySqlCommand("INSERT INTO refresh_tokens (user_id, token_hash, expires_at, ip_address) VALUES (@userId, @token, @expiresAt, @ip)", connection);
         command.Parameters.AddWithValue("userId", userId);
         command.Parameters.AddWithValue("token", token);
         command.Parameters.AddWithValue("expiresAt", expiresAt);
         if (IPAddress.TryParse(createdByIp, out var ipAddress))
         {
-            command.Parameters.AddWithValue("ip", NpgsqlDbType.Inet, ipAddress);
+            command.Parameters.AddWithValue("ip", ipAddress.ToString());
         }
         else
         {
@@ -245,27 +244,27 @@ public class UserRepository : IUserRepository
     private async Task<bool> ExistsAsync(string sql, string value)
     {
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("value", value);
         return await command.ExecuteScalarAsync() != null;
     }
 
-    private async Task<NpgsqlConnection> OpenConnectionAsync()
+    private async Task<MySqlConnection> OpenConnectionAsync()
     {
-        var connection = new NpgsqlConnection(_connectionString);
+        var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
         return connection;
     }
 
-    private static async Task<User?> FindUserAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string predicate, string parameterName, string value)
+    private static async Task<User?> FindUserAsync(MySqlConnection connection, MySqlTransaction transaction, string predicate, string parameterName, string value)
     {
-        await using var command = new NpgsqlCommand($"SELECT id, phone, email, name, role, avatar_url FROM users WHERE {predicate}", connection, transaction);
+        await using var command = new MySqlCommand($"SELECT id, phone, email, name, role, avatar_url FROM users WHERE {predicate}", connection, transaction);
         command.Parameters.AddWithValue(parameterName, value);
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync() ? MapUser(reader) : null;
     }
 
-    private static User MapUser(NpgsqlDataReader reader) => new()
+    private static User MapUser(MySqlDataReader reader) => new()
     {
         UserId = reader.GetGuid(0),
         MobileNumber = reader.IsDBNull(1) ? null : reader.GetString(1),
@@ -285,9 +284,9 @@ public class UserRepository : IUserRepository
             FROM users
             WHERE id = @id AND is_active = true;";
 
-        await using var conn = new NpgsqlConnection(_connectionString);
+        await using var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync();
-        await using var cmd = new NpgsqlCommand(sql, conn);
+        await using var cmd = new MySqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("id", userId);
 
         await using var r = await cmd.ExecuteReaderAsync();
@@ -321,9 +320,9 @@ public class UserRepository : IUserRepository
                 updated_at      = now()
             WHERE id = @id;";
 
-        await using var conn = new NpgsqlConnection(_connectionString);
+        await using var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync();
-        await using var cmd = new NpgsqlCommand(sql, conn);
+        await using var cmd = new MySqlCommand(sql, conn);
 
         cmd.Parameters.AddWithValue("id", userId);
         cmd.Parameters.AddWithValue("name", (object?)dto.Name ?? DBNull.Value);

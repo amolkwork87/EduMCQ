@@ -3,7 +3,7 @@ using System.Data;
 using EduMcq.Interfaces;
 using EduMcq.Models;
 using Microsoft.Extensions.Configuration;
-using Npgsql;
+using MySqlConnector;
 
 namespace EduMcq.Repository;
 
@@ -20,7 +20,19 @@ public class LeaderboardRepository : ILeaderboardRepository
         Guid currentUserId, string exam, int limit)
     {
         const string sql = @"
-            SELECT * FROM fn_get_leaderboard_global(@currentUserId, @exam, @limit);";
+            WITH user_stats AS (
+                SELECT user_id, COUNT(*) AS quizzes, COALESCE(SUM(correct_count), 0) AS score,
+                       ROUND(AVG(score_percentage), 1) AS accuracy
+                FROM test_attempts GROUP BY user_id
+            ), ranked AS (
+                SELECT user_stats.*, RANK() OVER (ORDER BY score DESC, accuracy DESC, quizzes DESC) AS `rank`
+                FROM user_stats
+            )
+            SELECT ranked.`rank`, COALESCE(users.name, users.email, 'Anonymous') AS name,
+                   ranked.score, ranked.quizzes, ranked.accuracy,
+                   (ranked.user_id = @currentUserId) AS is_current_user
+            FROM ranked JOIN users ON users.id = ranked.user_id
+            ORDER BY ranked.`rank` LIMIT @limit";
 
         return await QueryLeaderboardAsync(sql, currentUserId, exam, limit);
     }
@@ -29,7 +41,21 @@ public class LeaderboardRepository : ILeaderboardRepository
         Guid currentUserId, string exam, int limit)
     {
         const string sql = @"
-            SELECT * FROM fn_get_leaderboard_weekly(@currentUserId, @exam, @limit);";
+            WITH user_stats AS (
+                SELECT user_id, COUNT(*) AS quizzes, COALESCE(SUM(correct_count), 0) AS score,
+                       ROUND(AVG(score_percentage), 1) AS accuracy
+                FROM test_attempts
+                WHERE completed_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL WEEKDAY(CURRENT_TIMESTAMP) DAY)
+                GROUP BY user_id
+            ), ranked AS (
+                SELECT user_stats.*, RANK() OVER (ORDER BY score DESC, accuracy DESC, quizzes DESC) AS `rank`
+                FROM user_stats
+            )
+            SELECT ranked.`rank`, COALESCE(users.name, users.email, 'Anonymous') AS name,
+                   ranked.score, ranked.quizzes, ranked.accuracy,
+                   (ranked.user_id = @currentUserId) AS is_current_user
+            FROM ranked JOIN users ON users.id = ranked.user_id
+            ORDER BY ranked.`rank` LIMIT @limit";
 
         return await QueryLeaderboardAsync(sql, currentUserId, exam, limit);
     }
@@ -37,12 +63,21 @@ public class LeaderboardRepository : ILeaderboardRepository
     public async Task<UserLeaderboardStatsDto> GetMyStatsAsync(Guid currentUserId)
     {
         const string sql = @"
-            SELECT * FROM fn_get_my_leaderboard_stats(@currentUserId);";
+            WITH user_stats AS (
+                SELECT user_id, COUNT(*) AS quizzes, COALESCE(SUM(correct_count), 0) AS score,
+                       ROUND(AVG(score_percentage), 1) AS accuracy
+                FROM test_attempts GROUP BY user_id
+            ), ranked AS (
+                SELECT user_stats.*, RANK() OVER (ORDER BY score DESC, accuracy DESC, quizzes DESC) AS `rank`
+                FROM user_stats
+            )
+            SELECT `rank` AS global_rank, score AS total_points, accuracy, quizzes AS quizzes_taken
+            FROM ranked WHERE user_id = @currentUserId";
 
-        await using var conn = new NpgsqlConnection(_connectionString);
+        await using var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        await using var cmd = new NpgsqlCommand(sql, conn);
+        await using var cmd = new MySqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("currentUserId", currentUserId);
 
         await using var reader = await cmd.ExecuteReaderAsync();
@@ -74,10 +109,10 @@ public class LeaderboardRepository : ILeaderboardRepository
     {
         var list = new List<LeaderboardEntryDto>();
 
-        await using var conn = new NpgsqlConnection(_connectionString);
+        await using var conn = new MySqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        await using var cmd = new NpgsqlCommand(sql, conn);
+        await using var cmd = new MySqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("currentUserId", currentUserId);
         cmd.Parameters.AddWithValue("exam", exam ?? "all");
         cmd.Parameters.AddWithValue("limit", limit);

@@ -1,5 +1,5 @@
 using EduMcq.Interfaces;
-using Npgsql;
+using MySqlConnector;
 
 namespace EduMcq.Repository;
 
@@ -15,9 +15,9 @@ public class ImageRepository : IImageRepository
     public async Task InsertMetadataAsync(string publicUrl, string originalFileName, string storedFileName,
         string contentType, long fileSizeBytes, bool isQuestionImage)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(@"INSERT INTO image_library
+        await using var command = new MySqlCommand(@"INSERT INTO image_library
             (image_url, original_file_name, stored_file_name, content_type, file_size_bytes,
              is_question_image, is_active, created_at)
             VALUES (@url, @originalName, @storedName, @contentType, @size, @isQuestion, TRUE, NOW())", connection);

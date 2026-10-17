@@ -1,6 +1,6 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Npgsql;
+using MySqlConnector;
 
 namespace EduMcq.Repository;
 
@@ -16,17 +16,16 @@ public class ProgressRepository : IProgressRepository
     public async Task<ProgressSummaryDto> GetSummaryAsync(Guid userId)
     {
         const string sql = @"
-            SELECT 
-                quizzes_taken,
-                avg_accuracy,
-                total_time_seconds
-            FROM mv_user_progress
+            SELECT COUNT(*) AS quizzes_taken,
+                   ROUND(AVG(score_percentage), 2) AS avg_accuracy,
+                   COALESCE(SUM(time_taken_seconds), 0) AS total_time_seconds
+            FROM test_attempts
             WHERE user_id = @userId";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
 
         await using var reader = await command.ExecuteReaderAsync();
@@ -46,20 +45,22 @@ public class ProgressRepository : IProgressRepository
     public async Task<List<TopicPerformanceDto>> GetTopicPerformanceAsync(Guid userId)
     {
         const string sql = @"
-            SELECT 
-                topic_id,
-                topic_name,
-                questions_attempted,
-                accuracy
-            FROM mv_user_topic_performance
-            WHERE user_id = @userId
+            SELECT q.topic_id, t.name AS topic_name,
+                   COUNT(*) AS questions_attempted,
+                   ROUND(100.0 * SUM(CASE WHEN ta_answer.is_correct THEN 1 ELSE 0 END) / COUNT(*), 2) AS accuracy
+            FROM test_attempts ta
+            JOIN test_answers ta_answer ON ta_answer.attempt_id = ta.id
+            JOIN questions q ON q.id = ta_answer.question_id
+            JOIN topics t ON t.id = q.topic_id
+            WHERE ta.user_id = @userId AND q.topic_id IS NOT NULL
+            GROUP BY q.topic_id, t.name
             ORDER BY accuracy ASC";
 
         var list = new List<TopicPerformanceDto>();
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
 
         await using var reader = await command.ExecuteReaderAsync();
@@ -83,21 +84,21 @@ public class ProgressRepository : IProgressRepository
     public async Task<AccuracyTrendDto> GetWeeklyTrendAsync(Guid userId, int periodDays)
     {
         const string sql = @"
-            SELECT 
-                week_start,
-                avg_accuracy
-            FROM mv_user_weekly_accuracy
-            WHERE user_id = @userId
-              AND week_start >= CURRENT_DATE - (@periodDays || ' days')::interval
-            ORDER BY week_start";
+                        SELECT DATE_SUB(DATE(completed_at), INTERVAL WEEKDAY(completed_at) DAY) AS week_start,
+                                     ROUND(AVG(score_percentage), 2) AS avg_accuracy
+                        FROM test_attempts
+                        WHERE user_id = @userId
+                            AND completed_at >= DATE_SUB(CURRENT_DATE, INTERVAL @periodDays DAY)
+                        GROUP BY week_start
+                        ORDER BY week_start";
 
         var labels = new List<string>();
         var data = new List<decimal>();
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
         command.Parameters.AddWithValue("periodDays", periodDays);
 
@@ -115,13 +116,13 @@ public class ProgressRepository : IProgressRepository
     public async Task<ComparisonDto> GetComparisonAsync(Guid userId)
     {
         const string mySql = @"
-            SELECT avg_accuracy FROM mv_user_progress WHERE user_id = @userId";
+            SELECT ROUND(AVG(score_percentage), 2) FROM test_attempts WHERE user_id = @userId";
 
         decimal yourScore = 0;
-        await using (var connection = new NpgsqlConnection(_connectionString))
+        await using (var connection = new MySqlConnection(_connectionString))
         {
             await connection.OpenAsync();
-            await using var command = new NpgsqlCommand(mySql, connection);
+            await using var command = new MySqlCommand(mySql, connection);
             command.Parameters.AddWithValue("userId", userId);
             var value = await command.ExecuteScalarAsync();
             if (value != null && value != DBNull.Value)
@@ -130,18 +131,21 @@ public class ProgressRepository : IProgressRepository
 
         const string classSql = @"
             SELECT 
-                ROUND(AVG(avg_accuracy)::numeric, 2) AS class_avg,
-                ROUND(MAX(avg_accuracy)::numeric, 2) AS top_score
-            FROM mv_user_progress
-            WHERE quizzes_taken > 0";
+                ROUND(AVG(user_accuracy), 2) AS class_avg,
+                ROUND(MAX(user_accuracy), 2) AS top_score
+            FROM (
+                SELECT user_id, AVG(score_percentage) AS user_accuracy
+                FROM test_attempts
+                GROUP BY user_id
+            ) user_scores";
 
         decimal classAvg = 0;
         decimal topScore = 0;
 
-        await using (var connection = new NpgsqlConnection(_connectionString))
+        await using (var connection = new MySqlConnection(_connectionString))
         {
             await connection.OpenAsync();
-            await using var command = new NpgsqlCommand(classSql, connection);
+            await using var command = new MySqlCommand(classSql, connection);
             await using var reader = await command.ExecuteReaderAsync();
             if (await reader.ReadAsync())
             {
@@ -162,7 +166,7 @@ public class ProgressRepository : IProgressRepository
     {
         const string sql = @"
             WITH days AS (
-                SELECT DISTINCT completed_at::date AS d
+                SELECT DISTINCT DATE(completed_at) AS d
                 FROM test_attempts
                 WHERE user_id = @userId
                 ORDER BY d DESC
@@ -173,13 +177,13 @@ public class ProgressRepository : IProgressRepository
             )
             SELECT COUNT(*) 
             FROM numbered
-            WHERE d = CURRENT_DATE - (rn - 1) * INTERVAL '1 day'";
+            WHERE d = DATE_SUB(CURRENT_DATE, INTERVAL (rn - 1) DAY)";
 
         int streak = 0;
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
 
         var value = await command.ExecuteScalarAsync();

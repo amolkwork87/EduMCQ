@@ -2,7 +2,7 @@ using EduMcq.Interfaces;
 using EduMcq.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Npgsql;
+using MySqlConnector;
 
 namespace EduMcq.API.Controllers;
 
@@ -26,7 +26,7 @@ public class TopicController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { error = "Name is required" });
         try { return CreatedAtAction(nameof(GetTopics), new { subjectId }, await _topicService.CreateTopic(subjectId, req)); }
-        catch (PostgresException ex) when (ex.SqlState == "23505") { return Conflict(new { error = $"Topic '{req.Name}' already exists at this level" }); }
+        catch (MySqlException ex) when (ex.Number == 1062) { return Conflict(new { error = $"Topic '{req.Name}' already exists at this level" }); }
     }
 
     [HttpPut("topics/{id:guid}")]

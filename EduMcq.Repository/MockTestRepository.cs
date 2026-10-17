@@ -1,9 +1,7 @@
 // Repositories/MockTestRepository.cs
-using Npgsql;
-using NpgsqlTypes;
+using MySqlConnector;
 using EduMcq.Models;
 using EduMcq.Interfaces;
-using EduMcq.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace EduMcq.Repository;
@@ -34,9 +32,9 @@ public class MockTestRepository
             LEFT JOIN subjects sb ON sb.id = t.subject_id
             ORDER BY t.created_at DESC;";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(sql, connection);
+        await using var cmd = new MySqlCommand(sql, connection);
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
@@ -62,11 +60,11 @@ public class MockTestRepository
             LEFT JOIN subjects sb ON sb.id = t.subject_id
             WHERE t.id = @id;";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
         MockTestTemplate? tpl;
-        await using (var cmd = new NpgsqlCommand(sql, connection))
+        await using (var cmd = new MySqlCommand(sql, connection))
         {
             cmd.Parameters.AddWithValue("id", id);
             await using var r = await cmd.ExecuteReaderAsync();
@@ -75,7 +73,7 @@ public class MockTestRepository
         }
 
         // Load question ids
-        await using (var qcmd = new NpgsqlCommand(
+        await using (var qcmd = new MySqlCommand(
             "SELECT question_id FROM mock_test_questions WHERE template_id = @id ORDER BY display_order", connection))
         {
             qcmd.Parameters.AddWithValue("id", id);
@@ -89,7 +87,7 @@ public class MockTestRepository
     // ---------- CREATE ----------
     public async Task<Guid> CreateAsync(MockTestTemplateRequest req, Guid? userId)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
         await using var tx = await connection.BeginTransactionAsync();
 
@@ -105,7 +103,7 @@ public class MockTestRepository
                 VALUES (@id, @name, @desc, @exam, @std, @sub,
                         @tq, @tl, @ps, @de, @dm, @dh, @active);";
 
-            await using (var cmd = new NpgsqlCommand(insertTpl, connection, tx))
+            await using (var cmd = new MySqlCommand(insertTpl, connection, tx))
             {
                 AddTemplateParams(cmd, id, req, userId);
                 await cmd.ExecuteNonQueryAsync();
@@ -125,7 +123,7 @@ public class MockTestRepository
     // ---------- UPDATE ----------
     public async Task<bool> UpdateAsync(Guid id, MockTestTemplateRequest req)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
         await using var tx = await connection.BeginTransactionAsync();
         try
@@ -140,7 +138,7 @@ public class MockTestRepository
                     updated_at=now()
                 WHERE id=@id;";
 
-            await using (var cmd = new NpgsqlCommand(updTpl, connection, tx))
+            await using (var cmd = new MySqlCommand(updTpl, connection, tx))
             {
                 cmd.Parameters.AddWithValue("id", id);
                 AddTemplateParams(cmd, id, req, null, includeId: false);
@@ -149,7 +147,7 @@ public class MockTestRepository
             }
 
             // Replace question set
-            await using (var del = new NpgsqlCommand(
+            await using (var del = new MySqlCommand(
                 "DELETE FROM mock_test_questions WHERE template_id = @id", connection, tx))
             {
                 del.Parameters.AddWithValue("id", id);
@@ -170,9 +168,9 @@ public class MockTestRepository
     // ---------- DELETE ----------
     public async Task<bool> DeleteAsync(Guid id)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(
+        await using var cmd = new MySqlCommand(
             "DELETE FROM mock_test_templates WHERE id = @id", connection);
         cmd.Parameters.AddWithValue("id", id);
         return await cmd.ExecuteNonQueryAsync() > 0;
@@ -181,9 +179,9 @@ public class MockTestRepository
     // ---------- TOGGLE ACTIVE ----------
     public async Task<bool> ToggleActiveAsync(Guid id)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(@"
+        await using var cmd = new MySqlCommand(@"
             UPDATE mock_test_templates
             SET is_active = NOT is_active, updated_at = now()
             WHERE id = @id", connection);
@@ -207,7 +205,7 @@ public class MockTestRepository
             LEFT JOIN (
                 SELECT mtq.question_id,
                        COUNT(DISTINCT mtq.template_id) AS usage_count,
-                       STRING_AGG(DISTINCT mt.name, ', ') AS test_names
+                       GROUP_CONCAT(DISTINCT mt.name ORDER BY mt.name SEPARATOR ', ') AS test_names
                 FROM mock_test_questions mtq
                 JOIN mock_test_templates mt ON mt.id = mtq.template_id
                 GROUP BY mtq.question_id
@@ -218,13 +216,13 @@ public class MockTestRepository
               --AND (@sub    IS NULL OR q.subject_id = @sub)
               --AND (@topic  IS NULL OR q.topic_id = @topic)
               --AND (@diff   IS NULL OR q.difficulty = @diff)
-              --AND (@search IS NULL OR q.text ILIKE '%' || @search || '%')
+              -- MySQL text search filter can be added here if needed.
             ORDER BY usage_count ASC, q.created_at DESC
             LIMIT 500;";
 
-       await using var connection = new NpgsqlConnection(_connectionString);
+       await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(sql, connection);
+        await using var cmd = new MySqlCommand(sql, connection);
 
         cmd.Parameters.AddWithValue("exam",   (object?)f.ExamId     ?? DBNull.Value);
         cmd.Parameters.AddWithValue("std",    (object?)f.StandardId ?? DBNull.Value);
@@ -269,9 +267,9 @@ public class MockTestRepository
         if (filterCol != null) sql += $" AND {filterCol} = @f";
         sql += " ORDER BY name";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
-        await using var cmd = new NpgsqlCommand(sql, connection);
+        await using var cmd = new MySqlCommand(sql, connection);
         if (filterCol != null)
             cmd.Parameters.AddWithValue("f", (object?)filterVal ?? DBNull.Value);
 
@@ -282,7 +280,7 @@ public class MockTestRepository
     }
 
     // ---------- Helpers ----------
-    private static MockTestTemplate MapTemplate(NpgsqlDataReader r) => new()
+    private static MockTestTemplate MapTemplate(MySqlDataReader r) => new()
     {
         Id = r.GetGuid(0),
         Name = r.GetString(1),
@@ -306,7 +304,7 @@ public class MockTestRepository
         AverageScore = r.GetDecimal(19),
     };
 
-    private static void AddTemplateParams(NpgsqlCommand cmd, Guid id,
+    private static void AddTemplateParams(MySqlCommand cmd, Guid id,
         MockTestTemplateRequest req, Guid? userId, bool includeId = true)
     {
         if (includeId) cmd.Parameters.AddWithValue("id", id);
@@ -325,8 +323,8 @@ public class MockTestRepository
         //if (userId.HasValue) cmd.Parameters.AddWithValue("uid", userId.Value);
     }
 
-    private static async Task InsertQuestionsAsync(NpgsqlConnection conn,
-        NpgsqlTransaction tx, Guid templateId, List<Guid> questionIds)
+    private static async Task InsertQuestionsAsync(MySqlConnection conn,
+        MySqlTransaction tx, Guid templateId, List<Guid> questionIds)
     {
         if (questionIds == null || questionIds.Count == 0) return;
 
@@ -336,7 +334,7 @@ public class MockTestRepository
 
         for (int i = 0; i < questionIds.Count; i++)
         {
-            await using var cmd = new NpgsqlCommand(sql, conn, tx);
+            await using var cmd = new MySqlCommand(sql, conn, tx);
             cmd.Parameters.AddWithValue("t", templateId);
             cmd.Parameters.AddWithValue("q", questionIds[i]);
             cmd.Parameters.AddWithValue("o", i);

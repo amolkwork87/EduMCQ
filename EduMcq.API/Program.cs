@@ -2,7 +2,6 @@ using System.Data;
 using DotNetEnv;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.Extensions.FileProviders;
-using Npgsql;
 
 
 // Load environment variables from .env file

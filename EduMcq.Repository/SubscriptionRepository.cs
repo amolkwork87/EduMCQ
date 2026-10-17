@@ -1,6 +1,6 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Npgsql;
+using MySqlConnector;
 
 namespace EduMcq.Repository;
 
@@ -29,10 +29,10 @@ public class SubscriptionRepository : ISubscriptionRepository
             ORDER BY started_at DESC
             LIMIT 1";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
 
         await using var reader = await command.ExecuteReaderAsync();
@@ -74,10 +74,10 @@ public class SubscriptionRepository : ISubscriptionRepository
         int questionsUsed = 0;
         int quizzesTaken = 0;
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
 
         await using var reader = await command.ExecuteReaderAsync();
@@ -109,10 +109,10 @@ public class SubscriptionRepository : ISubscriptionRepository
 
         var list = new List<BillingHistoryItemDto>();
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
 
         await using var reader = await command.ExecuteReaderAsync();
@@ -139,7 +139,7 @@ public class SubscriptionRepository : ISubscriptionRepository
         if (plan is not ("pro" or "elite"))
             return (false, "Invalid plan", null);
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
         const string cancelSql = @"
@@ -147,29 +147,34 @@ public class SubscriptionRepository : ISubscriptionRepository
             SET status = 'cancelled', cancelled_at = now(), updated_at = now()
             WHERE user_id = @userId AND status = 'active'";
 
-        await using (var cancelCommand = new NpgsqlCommand(cancelSql, connection))
+        await using (var cancelCommand = new MySqlCommand(cancelSql, connection))
         {
             cancelCommand.Parameters.AddWithValue("userId", userId);
             await cancelCommand.ExecuteNonQueryAsync();
         }
 
+        var subscriptionId = Guid.NewGuid();
         const string insertSql = @"
             INSERT INTO subscriptions (
-                user_id, plan, status, amount_paise, currency,
+                id, user_id, plan, status, amount_paise, currency,
                 started_at, expires_at, auto_renew
             ) VALUES (
-                @userId, @plan, 'active', @amount, 'INR',
-                now(), now() + interval '1 year', true
-            )
-            RETURNING id, plan, status, amount_paise, currency,
-                      started_at, expires_at, cancelled_at, auto_renew";
+                @id, @userId, @plan, 'active', @amount, 'INR',
+                now(), DATE_ADD(now(), INTERVAL 1 YEAR), true
+            )";
 
-        await using var insertCommand = new NpgsqlCommand(insertSql, connection);
+        await using var insertCommand = new MySqlCommand(insertSql, connection);
+        insertCommand.Parameters.AddWithValue("id", subscriptionId);
         insertCommand.Parameters.AddWithValue("userId", userId);
         insertCommand.Parameters.AddWithValue("plan", plan);
         insertCommand.Parameters.AddWithValue("amount", amountPaise);
 
-        await using var reader = await insertCommand.ExecuteReaderAsync();
+        await insertCommand.ExecuteNonQueryAsync();
+        await using var selectCommand = new MySqlCommand(@"SELECT id, plan, status, amount_paise, currency,
+                      started_at, expires_at, cancelled_at, auto_renew
+            FROM subscriptions WHERE id = @id", connection);
+        selectCommand.Parameters.AddWithValue("id", subscriptionId);
+        await using var reader = await selectCommand.ExecuteReaderAsync();
         if (await reader.ReadAsync())
         {
             var dto = new SubscriptionDto
@@ -200,10 +205,10 @@ public class SubscriptionRepository : ISubscriptionRepository
                 updated_at = now()
             WHERE user_id = @userId AND status = 'active'";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("userId", userId);
 
         var rows = await command.ExecuteNonQueryAsync();
@@ -225,10 +230,10 @@ public class SubscriptionRepository : ISubscriptionRepository
                 WHERE user_id = @userId
                   AND completed_at >= date_trunc('month', CURRENT_DATE)";
 
-            await using var connection = new NpgsqlConnection(_connectionString);
+            await using var connection = new MySqlConnection(_connectionString);
             await connection.OpenAsync();
 
-            await using var command = new NpgsqlCommand(usageSql, connection);
+            await using var command = new MySqlCommand(usageSql, connection);
             command.Parameters.AddWithValue("userId", userId);
 
             var used = Convert.ToInt32(await command.ExecuteScalarAsync() ?? 0);

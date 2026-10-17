@@ -2,7 +2,7 @@ using EduMcq.Interfaces;
 using EduMcq.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Npgsql;
+using MySqlConnector;
 
 namespace EduMcq.API.Controllers;
 
@@ -22,7 +22,7 @@ public class SubjectController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { error = "Name is required" });
         try { return CreatedAtAction(nameof(GetSubjects), new { examId }, await _subjectService.CreateSubject(examId, req)); }
-        catch (PostgresException ex) when (ex.SqlState == "23505") { return Conflict(new { error = $"Subject '{req.Name}' already exists for this exam" }); }
+        catch (MySqlException ex) when (ex.Number == 1062) { return Conflict(new { error = $"Subject '{req.Name}' already exists for this exam" }); }
     }
 
     [HttpPut("subjects/{id:guid}")]

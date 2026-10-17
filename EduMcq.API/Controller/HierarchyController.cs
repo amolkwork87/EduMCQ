@@ -4,13 +4,13 @@
 //     [HttpGet("hierarchy/{examId:guid}")]
 //     public async Task<IActionResult> GetHierarchy(Guid examId)
 //     {
-//         await using var conn = new NpgsqlConnection(_connectionString);
+//         await using var conn = new MySqlConnection(_connectionString);
 //         await conn.OpenAsync();
 
 //         var hierarchy = new HierarchyResponse();
 
 //         // Get exam
-//         await using (var cmd = new NpgsqlCommand("SELECT * FROM exams WHERE id = @id", conn))
+//         await using (var cmd = new MySqlCommand("SELECT * FROM exams WHERE id = @id", conn))
 //         {
 //             cmd.Parameters.AddWithValue("id", examId);
 //             await using var reader = await cmd.ExecuteReaderAsync();
@@ -20,7 +20,7 @@
 
 //         // Get standards
 //         hierarchy.Standards = new List<Standard>();
-//         await using (var cmd = new NpgsqlCommand("SELECT * FROM standards WHERE exam_id = @id AND is_active = true ORDER BY display_order", conn))
+//         await using (var cmd = new MySqlCommand("SELECT * FROM standards WHERE exam_id = @id AND is_active = true ORDER BY display_order", conn))
 //         {
 //             cmd.Parameters.AddWithValue("id", examId);
 //             await using var reader = await cmd.ExecuteReaderAsync();
@@ -30,7 +30,7 @@
 
 //         // Get subjects with topics tree
 //         hierarchy.Subjects = new List<SubjectWithTopics>();
-//         await using (var cmd = new NpgsqlCommand(@"
+//         await using (var cmd = new MySqlCommand(@"
 //             SELECT s.*, 
 //                 (SELECT json_agg(json_build_object(
 //                     'id', t.id, 'name', t.name, 'slug', t.slug, 

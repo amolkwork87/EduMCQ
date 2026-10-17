@@ -5,7 +5,7 @@ using EduMcq.Services;
 using EvolveDb;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using Npgsql;
+using MySqlConnector;
 
 public static class ServiceCollection
 {
@@ -64,22 +64,22 @@ public static class ServiceCollection
 
         try
         {
-            using var connection = new NpgsqlConnection(connectionString);
+            using var connection = new MySqlConnection(connectionString);
 
             logger.LogInformation(
-                "Npgsql connection created. Host: {Host}, Database: {Database}",
-                connection.Host,
+                "MySQL connection created. Server: {Server}, Database: {Database}",
+                connection.DataSource,
                 connection.Database);
 
             connection.Open();
 
-            logger.LogInformation("PostgreSQL connection opened successfully.");
+            logger.LogInformation("MySQL connection opened successfully.");
 
             var evolve = new Evolve(
                 connection,
                 msg => logger.LogInformation(msg))
             {
-                Locations = new[] { "DB/DataMigration" },
+                Locations = new[] { "DB/DataMigration/ScriptsMySql" },
                 IsEraseDisabled = true,
                 MetadataTableName = "edumcq_changelog",
                 OutOfOrder = true

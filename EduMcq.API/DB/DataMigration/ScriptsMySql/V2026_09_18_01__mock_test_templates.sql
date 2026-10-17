@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS mock_test_templates (
+    id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    exam_id CHAR(36) REFERENCES exams(id) ON DELETE SET NULL,
+    standard_id CHAR(36) REFERENCES standards(id) ON DELETE SET NULL,
+    subject_id CHAR(36) REFERENCES subjects(id) ON DELETE SET NULL,
+    total_questions INT NOT NULL DEFAULT 0,
+    time_limit_minutes INT NOT NULL DEFAULT 45,
+    passing_score INT NOT NULL DEFAULT 60,
+    difficulty_easy_pct INT DEFAULT 30,
+    difficulty_medium_pct INT DEFAULT 50,
+    difficulty_hard_pct INT DEFAULT 20,
+    is_active BOOLEAN DEFAULT true,
+    created_by CHAR(36) REFERENCES users(id) ON DELETE SET NULL,
+    created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
+    last_used_at DATETIME(6),
+    usage_count INT DEFAULT 0,
+    average_score NUMERIC(5,2) DEFAULT 0
+);

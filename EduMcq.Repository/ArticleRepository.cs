@@ -1,6 +1,7 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Npgsql;
+using MySqlConnector;
+using System.Text.Json;
 
 namespace EduMcq.Repository;
 
@@ -23,25 +24,26 @@ public class ArticleRepository : IArticleRepository
     {
         var result = new ArticleListResponse();
         var where = new List<string> { "1=1" };
-        var parameters = new List<NpgsqlParameter>();
+        var parameters = new List<MySqlParameter>();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            where.Add(@"(title ILIKE @search OR excerpt ILIKE @search OR content ILIKE @search 
-                          OR EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE @search))");
-            parameters.Add(new NpgsqlParameter("search", $"%{search}%"));
+            where.Add(@"(LOWER(title) LIKE LOWER(@search) OR LOWER(excerpt) LIKE LOWER(@search)
+                          OR LOWER(content) LIKE LOWER(@search)
+                          OR JSON_SEARCH(tags, 'one', @search) IS NOT NULL)");
+            parameters.Add(new MySqlParameter("search", $"%{search}%"));
         }
 
         if (!string.IsNullOrWhiteSpace(category))
         {
             where.Add("category = @category");
-            parameters.Add(new NpgsqlParameter("category", category));
+            parameters.Add(new MySqlParameter("category", category));
         }
 
         if (!string.IsNullOrWhiteSpace(status))
         {
             where.Add("status = @status");
-            parameters.Add(new NpgsqlParameter("status", status));
+            parameters.Add(new MySqlParameter("status", status));
         }
 
         if (featuredOnly == true)
@@ -51,11 +53,11 @@ public class ArticleRepository : IArticleRepository
 
         var whereClause = string.Join(" AND ", where);
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
         var countSql = $"SELECT COUNT(*) FROM articles WHERE {whereClause}";
-        await using (var countCommand = new NpgsqlCommand(countSql, connection))
+        await using (var countCommand = new MySqlCommand(countSql, connection))
         {
             countCommand.Parameters.AddRange(parameters.ToArray());
             result.TotalCount = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
@@ -73,9 +75,9 @@ public class ArticleRepository : IArticleRepository
                 COALESCE(published_at, created_at) DESC
             LIMIT @pageSize OFFSET @offset";
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         foreach (var parameter in parameters)
-            command.Parameters.Add(new NpgsqlParameter(parameter.ParameterName, parameter.Value));
+            command.Parameters.Add(new MySqlParameter(parameter.ParameterName, parameter.Value));
 
         command.Parameters.AddWithValue("pageSize", pageSize);
         command.Parameters.AddWithValue("offset", (page - 1) * pageSize);
@@ -97,10 +99,10 @@ public class ArticleRepository : IArticleRepository
             FROM articles
             WHERE id = @id";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("id", id);
 
         await using var reader = await command.ExecuteReaderAsync();
@@ -112,34 +114,39 @@ public class ArticleRepository : IArticleRepository
 
     public async Task<ArticleDto> CreateAsync(CreateUpdateArticleRequest req, Guid? createdBy = null)
     {
+        var id = Guid.NewGuid();
         const string sql = @"
             INSERT INTO articles (
-                title, excerpt, content, author_name, author_avatar,
+                id, title, excerpt, content, author_name, author_avatar,
                 category, tags, cover_image_url, read_time_minutes,
                 is_featured, status, published_at, created_by
             ) VALUES (
-                @title, @excerpt, @content, @authorName, @authorAvatar,
+                @id, @title, @excerpt, @content, @authorName, @authorAvatar,
                 @category, @tags, @coverImageUrl, @readTime,
                 @isFeatured, @status,
                 CASE WHEN @status = 'published' THEN now() ELSE NULL END,
                 @createdBy
-            )
-            RETURNING id, title, slug, excerpt, content,
-                      author_name, author_avatar, category, tags,
-                      cover_image_url, read_time_minutes, is_featured, status,
-                      view_count, like_count, published_at, created_at, updated_at";
+            )";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
         if (req.IsFeatured)
             await UnsetOtherFeaturedAsync(connection);
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
+        command.Parameters.AddWithValue("id", id);
         AddArticleParameters(command, req);
         command.Parameters.AddWithValue("createdBy", (object?)createdBy ?? DBNull.Value);
 
-        await using var reader = await command.ExecuteReaderAsync();
+        await command.ExecuteNonQueryAsync();
+        await using var select = new MySqlCommand(@"SELECT id, title, slug, excerpt, content,
+                   author_name, author_avatar, category, tags,
+                   cover_image_url, read_time_minutes, is_featured, status,
+                   view_count, like_count, published_at, created_at, updated_at
+            FROM articles WHERE id = @id", connection);
+        select.Parameters.AddWithValue("id", id);
+        await using var reader = await select.ExecuteReaderAsync();
         await reader.ReadAsync();
         return MapArticle(reader);
     }
@@ -165,23 +172,26 @@ public class ArticleRepository : IArticleRepository
                     ELSE published_at
                 END,
                 updated_at = now()
-            WHERE id = @id
-            RETURNING id, title, slug, excerpt, content,
-                      author_name, author_avatar, category, tags,
-                      cover_image_url, read_time_minutes, is_featured, status,
-                      view_count, like_count, published_at, created_at, updated_at";
+            WHERE id = @id";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
         if (req.IsFeatured)
             await UnsetOtherFeaturedAsync(connection, id);
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("id", id);
         AddArticleParameters(command, req);
 
-        await using var reader = await command.ExecuteReaderAsync();
+        await command.ExecuteNonQueryAsync();
+        await using var select = new MySqlCommand(@"SELECT id, title, slug, excerpt, content,
+                   author_name, author_avatar, category, tags,
+                   cover_image_url, read_time_minutes, is_featured, status,
+                   view_count, like_count, published_at, created_at, updated_at
+            FROM articles WHERE id = @id", connection);
+        select.Parameters.AddWithValue("id", id);
+        await using var reader = await select.ExecuteReaderAsync();
         if (await reader.ReadAsync())
             return MapArticle(reader);
 
@@ -192,10 +202,10 @@ public class ArticleRepository : IArticleRepository
     {
         const string sql = "DELETE FROM articles WHERE id = @id";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("id", id);
 
         return await command.ExecuteNonQueryAsync() > 0;
@@ -203,11 +213,11 @@ public class ArticleRepository : IArticleRepository
 
     public async Task<bool> ToggleFeaturedAsync(Guid id)
     {
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
         const string getSql = "SELECT is_featured FROM articles WHERE id = @id";
-        await using var getCommand = new NpgsqlCommand(getSql, connection);
+        await using var getCommand = new MySqlCommand(getSql, connection);
         getCommand.Parameters.AddWithValue("id", id);
         var current = await getCommand.ExecuteScalarAsync();
         if (current == null)
@@ -223,7 +233,7 @@ public class ArticleRepository : IArticleRepository
             SET is_featured = @value, updated_at = now()
             WHERE id = @id";
 
-        await using var command = new NpgsqlCommand(updateSql, connection);
+        await using var command = new MySqlCommand(updateSql, connection);
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("value", newValue);
 
@@ -237,10 +247,10 @@ public class ArticleRepository : IArticleRepository
             SET view_count = view_count + 1 
             WHERE id = @id AND status = 'published'";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("id", id);
         await command.ExecuteNonQueryAsync();
     }
@@ -248,35 +258,38 @@ public class ArticleRepository : IArticleRepository
     public async Task<int> IncrementLikeAsync(Guid id)
     {
         const string sql = @"
-            UPDATE articles 
-            SET like_count = like_count + 1 
-            WHERE id = @id AND status = 'published'
-            RETURNING like_count";
+            UPDATE articles
+            SET like_count = like_count + 1
+            WHERE id = @id AND status = 'published'";
 
-        await using var connection = new NpgsqlConnection(_connectionString);
+        await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("id", id);
 
-        var result = await command.ExecuteScalarAsync();
+        var rows = await command.ExecuteNonQueryAsync();
+        if (rows == 0) return 0;
+        await using var select = new MySqlCommand("SELECT like_count FROM articles WHERE id = @id", connection);
+        select.Parameters.AddWithValue("id", id);
+        var result = await select.ExecuteScalarAsync();
         return result == null ? 0 : Convert.ToInt32(result);
     }
 
-    private async Task UnsetOtherFeaturedAsync(NpgsqlConnection connection, Guid? exceptId = null)
+    private async Task UnsetOtherFeaturedAsync(MySqlConnection connection, Guid? exceptId = null)
     {
         var sql = exceptId.HasValue
             ? "UPDATE articles SET is_featured = FALSE WHERE is_featured = TRUE AND id <> @exceptId"
             : "UPDATE articles SET is_featured = FALSE WHERE is_featured = TRUE";
 
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         if (exceptId.HasValue)
             command.Parameters.AddWithValue("exceptId", exceptId.Value);
 
         await command.ExecuteNonQueryAsync();
     }
 
-    private static void AddArticleParameters(NpgsqlCommand command, CreateUpdateArticleRequest req)
+    private static void AddArticleParameters(MySqlCommand command, CreateUpdateArticleRequest req)
     {
         command.Parameters.AddWithValue("title", req.Title);
         command.Parameters.AddWithValue("excerpt", (object?)req.Excerpt ?? DBNull.Value);
@@ -284,14 +297,14 @@ public class ArticleRepository : IArticleRepository
         command.Parameters.AddWithValue("authorName", req.AuthorName);
         command.Parameters.AddWithValue("authorAvatar", (object?)req.AuthorAvatar ?? DBNull.Value);
         command.Parameters.AddWithValue("category", req.Category);
-        command.Parameters.AddWithValue("tags", req.Tags ?? Array.Empty<string>());
+        command.Parameters.AddWithValue("tags", JsonSerializer.Serialize(req.Tags ?? Array.Empty<string>()));
         command.Parameters.AddWithValue("coverImageUrl", (object?)req.CoverImageUrl ?? DBNull.Value);
         command.Parameters.AddWithValue("readTime", req.ReadTimeMinutes);
         command.Parameters.AddWithValue("isFeatured", req.IsFeatured);
         command.Parameters.AddWithValue("status", req.Status);
     }
 
-    private static ArticleDto MapArticle(NpgsqlDataReader reader)
+    private static ArticleDto MapArticle(MySqlDataReader reader)
     {
         return new ArticleDto
         {
@@ -303,7 +316,7 @@ public class ArticleRepository : IArticleRepository
             AuthorName = reader.GetString(5),
             AuthorAvatar = reader.IsDBNull(6) ? null : reader.GetString(6),
             Category = reader.GetString(7),
-            Tags = reader.IsDBNull(8) ? Array.Empty<string>() : (string[])reader.GetValue(8),
+            Tags = reader.IsDBNull(8) ? Array.Empty<string>() : JsonSerializer.Deserialize<string[]>(reader.GetString(8)) ?? Array.Empty<string>(),
             CoverImageUrl = reader.IsDBNull(9) ? null : reader.GetString(9),
             ReadTimeMinutes = reader.GetInt16(10),
             IsFeatured = reader.GetBoolean(11),

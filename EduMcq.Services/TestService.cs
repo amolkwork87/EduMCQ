@@ -1,6 +1,5 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Npgsql;
 
 namespace EduMcq.Services;
 

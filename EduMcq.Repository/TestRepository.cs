@@ -1,7 +1,6 @@
 using EduMcq.Interfaces;
 using EduMcq.Models;
-using Npgsql;
-using NpgsqlTypes;
+using MySqlConnector;
 
 namespace EduMcq.Repository;
 
@@ -20,7 +19,7 @@ public class TestRepository : ITestRepository
         var exams = new List<ExamDto>();
 
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
@@ -45,7 +44,7 @@ public class TestRepository : ITestRepository
         var standards = new List<StandardDto>();
 
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("examId", examId);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -71,7 +70,7 @@ public class TestRepository : ITestRepository
         var subjects = new List<SubjectDto>();
 
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("examId", examId);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -122,7 +121,7 @@ public class TestRepository : ITestRepository
 
         var questions = new List<QuestionDto>();
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("subjectId", subjectId);
         command.Parameters.AddWithValue("standardId", standardId);
         command.Parameters.AddWithValue("limit", limit);
@@ -162,7 +161,7 @@ public class TestRepository : ITestRepository
             WHERE q.id = @id";
 
         await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
+        await using var command = new MySqlCommand(sql, connection);
         command.Parameters.AddWithValue("id", id);
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync() ? ReadQuestion(reader) : null;
@@ -173,15 +172,16 @@ public class TestRepository : ITestRepository
         await using var connection = await OpenConnectionAsync();
         await using var transaction = await connection.BeginTransactionAsync();
 
+        var attemptId = Guid.NewGuid();
         const string attemptSql = @"
             INSERT INTO test_attempts (id, user_id, subject_id, standard_id, total_questions,
                 correct_count, wrong_count, unanswered_count, score_percentage,
                 time_taken_seconds, started_at, completed_at)
-            VALUES (gen_random_uuid(), @userId, @subjectId, @standardId, @total, @correct,
-                @wrong, @unanswered, @score, @timeTaken, @startedAt, @completedAt)
-            RETURNING id";
+            VALUES (@attemptId, @userId, @subjectId, @standardId, @total, @correct,
+                @wrong, @unanswered, @score, @timeTaken, @startedAt, @completedAt)";
 
-        await using var command = new NpgsqlCommand(attemptSql, connection, transaction);
+        await using var command = new MySqlCommand(attemptSql, connection, transaction);
+        command.Parameters.AddWithValue("attemptId", attemptId);
         command.Parameters.AddWithValue("userId", submission.UserId);
         command.Parameters.AddWithValue("subjectId", submission.SubjectId);
         command.Parameters.AddWithValue("standardId", submission.StandardId);
@@ -194,19 +194,20 @@ public class TestRepository : ITestRepository
         command.Parameters.AddWithValue("startedAt", submission.StartedAt);
         command.Parameters.AddWithValue("completedAt", DateTime.UtcNow);
 
-        var attemptId = await command.ExecuteScalarAsync();
+        await command.ExecuteNonQueryAsync();
         foreach (var answer in submission.Answers)
         {
             var questionResult = result.QuestionResults.FirstOrDefault(r => r.QuestionId == answer.QuestionId);
             if (questionResult is null)
                 continue;
 
-            await using var answerCommand = new NpgsqlCommand(@"
+            await using var answerCommand = new MySqlCommand(@"
                 INSERT INTO test_answers (id, attempt_id, question_id, selected_option, is_correct)
-                VALUES (gen_random_uuid(), @attemptId, @questionId, @selectedOption, @isCorrect)
-                ON CONFLICT (attempt_id, question_id) DO UPDATE
-                SET selected_option = EXCLUDED.selected_option, is_correct = EXCLUDED.is_correct", connection, transaction);
-            answerCommand.Parameters.AddWithValue("attemptId", attemptId!);
+                VALUES (@id, @attemptId, @questionId, @selectedOption, @isCorrect)
+                ON DUPLICATE KEY UPDATE
+                selected_option = VALUES(selected_option), is_correct = VALUES(is_correct)", connection, transaction);
+            answerCommand.Parameters.AddWithValue("id", Guid.NewGuid());
+            answerCommand.Parameters.AddWithValue("attemptId", attemptId);
             answerCommand.Parameters.AddWithValue("questionId", answer.QuestionId);
             answerCommand.Parameters.AddWithValue("selectedOption", answer.SelectedOption.HasValue ? (object)answer.SelectedOption.Value : DBNull.Value);
             answerCommand.Parameters.AddWithValue("isCorrect", questionResult.IsCorrect);
@@ -216,14 +217,14 @@ public class TestRepository : ITestRepository
         await transaction.CommitAsync();
     }
 
-    private async Task<NpgsqlConnection> OpenConnectionAsync()
+    private async Task<MySqlConnection> OpenConnectionAsync()
     {
-        var connection = new NpgsqlConnection(_connectionString);
+        var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
         return connection;
     }
 
-    private static QuestionDto ReadQuestion(NpgsqlDataReader reader) => new()
+    private static QuestionDto ReadQuestion(MySqlDataReader reader) => new()
     {
         Id = reader.GetGuid(0),
         QuestionText = reader.GetString(1),
@@ -263,17 +264,17 @@ public class TestRepository : ITestRepository
 
         var list = new List<AvailableTestDto>();
         await using var connection = await OpenConnectionAsync();
-        await using var cmd = new NpgsqlCommand(sql, connection);
-        // Explicit NpgsqlDbType.Uuid tells Npgsql what to send — no more text inference
-    cmd.Parameters.Add(new NpgsqlParameter("exam", NpgsqlDbType.Uuid)
+        await using var cmd = new MySqlCommand(sql, connection);
+        // Use Guid parameters so MySqlConnector serializes UUID columns consistently.
+    cmd.Parameters.Add(new MySqlParameter("exam", MySqlDbType.Guid)
     {
         Value = (object?)examId ?? DBNull.Value
     });
-    cmd.Parameters.Add(new NpgsqlParameter("std", NpgsqlDbType.Uuid)
+    cmd.Parameters.Add(new MySqlParameter("std", MySqlDbType.Guid)
     {
         Value = (object?)standardId ?? DBNull.Value
     });
-    cmd.Parameters.Add(new NpgsqlParameter("sub", NpgsqlDbType.Uuid)
+    cmd.Parameters.Add(new MySqlParameter("sub", MySqlDbType.Guid)
     {
         Value = (object?)subjectId ?? DBNull.Value
     });
@@ -313,7 +314,7 @@ public class TestRepository : ITestRepository
             FROM mock_test_templates
             WHERE id = @id AND is_active = true;";
 
-        await using (var hcmd = new NpgsqlCommand(headerSql, connection))
+        await using (var hcmd = new MySqlCommand(headerSql, connection))
         {
             hcmd.Parameters.AddWithValue("id", templateId);
             await using var hr = await hcmd.ExecuteReaderAsync();
@@ -358,7 +359,7 @@ GROUP BY
     tp.name, c.name
 ORDER BY random();";
 
-        await using (var qcmd = new NpgsqlCommand(qSql, connection))
+        await using (var qcmd = new MySqlCommand(qSql, connection))
         {
             qcmd.Parameters.AddWithValue("tid", templateId);
             await using var qr = await qcmd.ExecuteReaderAsync();
@@ -404,7 +405,7 @@ ORDER BY random();";
 
         Guid? subjectId = null;
         Guid? standardId = null;
-        await using (var templateCommand = new NpgsqlCommand(@"
+        await using (var templateCommand = new MySqlCommand(@"
             SELECT subject_id, standard_id
             FROM mock_test_templates
             WHERE id = @id;", connection))
@@ -446,7 +447,7 @@ LEFT JOIN LATERAL (
 ) o ON true
 WHERE mtq.template_id = @tid;";
 
-        await using (var cmd = new NpgsqlCommand(sql, connection))
+        await using (var cmd = new MySqlCommand(sql, connection))
         {
             cmd.Parameters.AddWithValue("tid", templateId);
             await using var r = await cmd.ExecuteReaderAsync();
@@ -519,7 +520,7 @@ WHERE mtq.template_id = @tid;";
         int pct = total > 0 ? (int)Math.Round(correct * 100.0 / total) : 0;
 
         // Track usage in template
-        await using (var upd = new NpgsqlCommand(@"
+        await using (var upd = new MySqlCommand(@"
             UPDATE mock_test_templates
             SET usage_count = usage_count + 1,
                 last_used_at = now(),
